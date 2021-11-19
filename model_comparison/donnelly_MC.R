@@ -29,6 +29,8 @@ feeding_dispersal <- function(I, v, w, e) {
   
   ## MARKOV CHAIN ##
   while (feeding == F) {
+    
+    
     if (state == "flight") {
       
       # use transition matrix to work out new state of markov chain

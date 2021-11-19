@@ -1,0 +1,173 @@
+
+#######################################################################
+##### RECREATION OF STOCHASTIC SIMULATION BY DONNELLY ET AL. 2019 #####
+#######################################################################
+# winged aphids only
+
+  
+run_simulation <- function(t, timeframe, I, A, parms) {
+
+  # initialise vectors of A, I and time vals
+  I_vals <- I
+  A_vals <- A
+  time <- t
+  
+  # define vector preference parameters
+  v <- parms["v"]
+  e <- parms["e"]
+  w <- parms["w"]
+  
+  while (t < timeframe) {
+    
+    i_plant_recovery <- parms["gamma"] * I
+    aphid_death <- A * parms["b"]
+    aphid_dispersal <- A * parms["theta"]
+    aphid_reproduction <- parms["a"] * A * (1 - A/parms["K"])
+
+    total_rate <- sum(i_plant_recovery, aphid_death, aphid_dispersal, aphid_reproduction)
+    
+    if (I == 0 | A == 0) {
+      t <- t + 1 #time step can no longer be calculated so count up arbitrarily
+    }
+    else {
+    
+      # generate time step according to exponential distribution with mean of total rate
+      dt <- rexp(1, 1/total_rate)
+      t <- t + dt
+      
+      events <- c("i_plant_recovery", "aphid_death", "aphid_dispersal", "aphid_reproduction")
+      event_rates <- c(i_plant_recovery, aphid_death, aphid_dispersal, aphid_reproduction)
+      
+      current_event <- sample(events, 1, replace=T, prob=event_rates)
+      
+      if (current_event == "i_plant_recovery") {
+        I <- I - 1
+      }
+      else if (current_event == "aphid_death") {
+        A <- A - 1
+      }
+      else if (current_event == "aphid_reproduction") {
+        A <- A + 1
+      }
+      else { # current_event == "aphid_dispersal"
+        
+        S <- H - I
+        i_hat <- (v*I)/(S + v*I)
+        
+        states <- c("probeS", "probeI", "feedS", "feedI", "flight")
+        
+        transition_matrix <- matrix(c(((1-w)*(1-i_hat)), ((1-w)*i_hat), w, 0,   0,
+                                      (1-e*w)*(1-i_hat), (1-e*w)*i_hat, 0, e*w, 0,
+                                      0,                 0,             1, 0,   0,
+                                      0,                 0,             0, 1,   0,
+                                      1-i_hat,           i_hat,         0, 0,   0),
+                                    nrow = 5, byrow=T,
+                                    dimnames = list(states))
+        
+        state <- "flight" # dispersal event always starts with flight from plant
+        #state_changes <- "flight"
+        #transmissions <- 0
+        feeding <- F
+        
+        ## MARKOV CHAIN ##
+        while (feeding == F) {
+          
+          # if uniform rv is less than p, aphid dies/emigrates. break out of feeding dispersal
+          if (runif(1, min=0, max=1) < p) {
+            A <- A - 1
+            break
+          }
+          
+          if (state == "flight") {
+            
+            # use transition matrix to work out new state of markov chain
+            state <- sample(states, 1, replace=T, prob = transition_matrix["flight",])
+          }
+          
+          else if (state == "probeI") { # aphid has now acquired the virus
+            
+            state <- sample(states, 1, replace=T, prob = transition_matrix["probeI",])
+            
+            if (state == "probeS") {
+              I <- I + 1 # inoculation event
+              #transmissions <- transmissions + 1 # probeI -> probeS means transmission has taken place
+            }
+            else if (state == "feedI") {
+              feeding <- T
+            }
+          }
+          
+          else if (state == "probeS") {
+            
+            state <- sample(states, 1, replace=T, prob = transition_matrix["probeS",])
+            
+            if (state == "feedS") {
+              feeding <- T
+            }
+          }
+          
+          # add state to vector of all states
+          #state_changes <- c(state_changes, state)
+        }
+        
+        
+      }
+      
+
+    }
+    
+    #S_vals <- c(S_vals, S)
+    I_vals <- c(I_vals, I)
+    A_vals <- c(A_vals, A)
+    time <- c(time, t)
+    
+  }
+  
+  run_df <- data.frame(time, I_vals, A_vals)
+  
+  #find S, I and R levels at set times and put in data frame to return from function
+  run.I.times <- approx(x = run_df$time,
+                        y = run_df$I_vals,
+                        xout = time_points,
+                        method = "constant")
+  run.I.times.df <- data.frame(run.I.times[1], run.I.times[2])
+  colnames(run.I.times.df) <- c("time", "num_infected")
+  
+  run.A.times <- approx(x = run_df$time,
+                        y = run_df$A_vals,
+                        xout = time_points,
+                        method = "constant")
+  run.A.times.df <- data.frame(run.A.times[1], run.A.times[2])
+  colnames(run.A.times.df) <- c("time", "num_aphids")
+  
+
+  
+  return(list(run.I.times.df, run.A.times.df))
+}
+
+# define time frame
+t <- 0
+timeframe <- 20
+time_points <- 0:timeframe
+
+# define parameters
+parms <- c(
+  gamma = 0.1, # rate of recovery/death of I plants
+  b = 0.1, # aphid mortality rate per day
+  theta = 0.1, # aphid dispersal rate per day
+  a = 0.1, # reproduction rate per aphid per day
+  K = 20, # aphid reproduction limit - maximum aphids per plant
+  H = 200, # number host plants
+  p = 0.1, # aphid emigration/death rate per journey between plants
+  v = 1.2, # infected plant attractiveness
+  e = 0.8, # infected plant acceptability 
+  w = 0.2 # feeding rate on healthy plant
+)
+
+# define states
+A <- 100 # num aphids
+I <- 4 # num infected plants
+
+
+run_simulation(t, timeframe, I, A, parms)
+  
