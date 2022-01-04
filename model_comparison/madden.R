@@ -3,6 +3,8 @@
 ##### RECREATION OF MODEL BY MADDEN ET AL. 2000 #####
 #####################################################
 
+rm(list=ls())
+
 #packages
 library(deSolve)
 library(ggplot2)
@@ -110,22 +112,16 @@ madden_ode_func <- function(times, y, par) {
   become_infective <- par[["eta"]] * y[["Y"]]
   stop_being_infective <- par[["tau"]] * y[["Z"]]
 
-  # dX <- birth - born_infective - death_X
-  #       + immigration_X - emigration_X
-  #       - acquisition + stop_being_infective
-  # dY <- acquisition - become_infective
-  #       + immigration_Y - emigration_Y
-  #       - death_Y
-  # dZ <- become_infective - stop_being_infective
-  #       + immigration_Z - emigration_Z
-  #       + born_infective - death_Z
-  
-  dX <- par[["v_t"]] - par[["v_t"]] * par[["q"]] * (y[["Z"]] / (y[["X"]] + y[["Y"]] + y[["Z"]])) + par[["tau"]] * y[["Z"]] +
-    par[["Ix"]] - par[["Ex"]] * y[["X"]] - par[["alpha"]] * y[["X"]] - par[["phi"]] * a * y[["S"]] * y[["X"]] / par[["K"]]
-  dY <- par[["phi"]] * a * y[["S"]] * y[["X"]] / par[["K"]] + par[["Iy"]] - par[["Ey"]] * y[["Y"]] - par[["alpha"]] * y[["Y"]] -
-    par[["eta"]] * y[["Y"]]
-  dZ <- par[["eta"]] * y[["Y"]] - par[["tau"]] * y[["Z"]] + par[["Iz"]] - par[["Ez"]] * y[["Z"]] +
-    par[["v_t"]] * par[["q"]] * (y[["Z"]] / (y[["X"]] + y[["Y"]] + y[["Z"]])) - par[["alpha"]] * y[["Z"]]
+  dX <- birth - born_infective - death_X + immigration_X - emigration_X - acquisition + stop_being_infective
+  dY <- acquisition - become_infective + immigration_Y - emigration_Y - death_Y
+  dZ <- become_infective - stop_being_infective + immigration_Z - emigration_Z + born_infective - death_Z
+
+  # dX <- par[["v_t"]] - par[["v_t"]] * par[["q"]] * (y[["Z"]] / (y[["X"]] + y[["Y"]] + y[["Z"]])) + par[["tau"]] * y[["Z"]] +
+  #   par[["Ix"]] - par[["Ex"]] * y[["X"]] - par[["alpha"]] * y[["X"]] - par[["phi"]] * a * y[["S"]] * y[["X"]] / par[["K"]]
+  # dY <- par[["phi"]] * a * y[["S"]] * y[["X"]] / par[["K"]] + par[["Iy"]] - par[["Ey"]] * y[["Y"]] - par[["alpha"]] * y[["Y"]] -
+  #   par[["eta"]] * y[["Y"]]
+  # dZ <- par[["eta"]] * y[["Y"]] - par[["tau"]] * y[["Z"]] + par[["Iz"]] - par[["Ez"]] * y[["Z"]] +
+  #   par[["v_t"]] * par[["q"]] * (y[["Z"]] / (y[["X"]] + y[["Y"]] + y[["Z"]])) - par[["alpha"]] * y[["Z"]]
 
   
   return(list(c(dH, dL, dS, dR, dX, dY, dZ)))
@@ -144,13 +140,15 @@ plant_trajec <- ggplot(data=trajectory_long %>% filter(compartment == "H" |
                                               compartment == "S" |
                                               compartment == "R"), 
                        aes(x = time, y = number, col = compartment)) +
-  geom_line()
+  geom_line() +
+  labs(y = "number of plants")
 plant_trajec
 
 vector_trajectory <- ggplot(data=trajectory_long %>% filter(compartment == "X" |
                                                              compartment == "Y" |
                                                              compartment == "Z"), 
                             aes(x = time, y = number, col = compartment)) +
-  geom_line()
+  geom_line() +
+  labs(y = "Nnumber of vectors")
 vector_trajectory
 
