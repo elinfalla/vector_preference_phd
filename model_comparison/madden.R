@@ -149,6 +149,6 @@ vector_trajectory <- ggplot(data=trajectory_long %>% filter(compartment == "X" |
                                                              compartment == "Z"), 
                             aes(x = time, y = number, col = compartment)) +
   geom_line() +
-  labs(y = "Nnumber of vectors")
+  labs(y = "number of vectors")
 vector_trajectory
 

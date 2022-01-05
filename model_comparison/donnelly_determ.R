@@ -23,7 +23,7 @@ parms <- c(
   v = 1, # infected plant attractiveness
   e = 1, # infected plant acceptability 
   w = 0.2, # feeding rate on healthy plant
-  Pacq = 1, # chance of virus acqusition from infected plant
+  Pacq = 1, # chance of virus acquisition from infected plant
   Pinoc = 1 # chance of inoculating healthy plant
 )
 

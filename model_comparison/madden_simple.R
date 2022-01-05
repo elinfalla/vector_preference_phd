@@ -4,13 +4,16 @@
 #########################################################
 
 ### Simplified version of model by Madden et al. 2000 to make it more comparable to model by Donnelly et al. 2019.
-### No vector immigration, plants are represented by an SI rather than an SEIR model.
+### No vector immigration or emigration, plants are represented by an SI rather than an SEIR model, vectors represented by an 
+### SI rather than SEI model. Vectors cannot be born infective (as this model represents NPT viruses).
 
 rm(list=ls())
 
 #packages
 library(deSolve)
 library(reshape2)
+library(ggplot2)
+library(dplyr)
 
 # TIME FRAME
 times <- seq(0, 20, by = 0.2)
@@ -18,46 +21,45 @@ times <- seq(0, 20, by = 0.2)
 # INITIAL STATES
 P <- 1200 # total number of vectors
 N <- 400 # number of plants
-I <- 100
+I <- 1 # number of infected plants
 
 init_states <- c(
   I = I, # number of infected plants
   #S = N - I, # number of susceptible plants
   X = P, # number healthy insects
-  Y = 0, # number latent insects
   Z = 0 # number infective insects
 )
 
 # PARAMETERS
 phi <- 1 # plants visited per day by an insect
 alpha <- 0.2 # mortality rate
+k1 <- 1/0.021
+T <- 0.5/phi
+lamda = 1/0.021
 
 parms <- c(
   N = N, # number of host plants (equivalent to K in original Madden model)
   P = P, # total number of vectors
   phi = phi, # plants visited per day by insect
-  k1 = 1/0.021, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
-  T = 0.5/phi, # # time feeding/probing per plant visit
+  k1 = k1, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
+  lamda = lamda, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
+  alpha = alpha, # vector population mortality rate
+  T = T, # # time feeding/probing per plant visit
   c = 20/3/2, # natural plant death rate (equivalent to beta in original Madden model)
   d = 20/3/2, # plant death due to infection
-  lamda = 1/0.021, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
-  v_t = alpha * (init_states[["X"]] + init_states[["Y"]] + init_states[["Z"]]), # birth rate of vectors per day
-  q = 0, # probability of vector offspring being viliferous (set to NPT virus)
-  alpha = alpha, # vector population mortality rate
-  Ex = 0.2/3, # emigration rate for healthy insects
-  Ey = 0.2/3, # emigration rate for latent state insects
-  Ez = 0.2/3, # emigration rate for infective insects
+  v_t = alpha * (init_states[["X"]] + init_states[["Z"]]), # birth rate of vectors per day
   tau = 1/0.25, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
-  eta = 99999999999 # rate of moving through latent state in vector (set to NPT virus, no latent stage)
+  b = 1 - exp(-k1 * T), # prob of plant inoculation per infective insect visit 
+  a = 1 - exp(-lamda * T) # probability of vector acquisition of virus from an infected plant per visit
+  
 )
 
 
 madden_simple <- function(times, y, par) {
   
   # PLANT EQUATIONS
-  b <- 1 - exp(-par[["k1"]] * par[["T"]]) # prob of plant inoculation per infective insect visit 
   
-  become_infected <- par[["phi"]] * b * y[["Z"]] * (par[["N"]] - y[["I"]]) / par[["N"]]
+  become_infected <- par[["phi"]] * par[["b"]] * y[["Z"]] * (par[["N"]] - y[["I"]]) / par[["N"]]
   
   natural_death_I <- par[["c"]] * y[["I"]]
   #natural_death_S <- par[["c"]] * y[["S"]]
@@ -70,32 +72,21 @@ madden_simple <- function(times, y, par) {
   #dS <- birth - become_infected - natural_death_S
   
   # VECTOR EQUATIONS
-  a <- 1 - exp(-par[["lamda"]] * par[["T"]]) # probability of vector acquisition of virus from an infected plant per visit
   
   # birth and death
   birth <- par[["v_t"]]
-  born_infective <- par[["v_t"]] * par[["q"]] * (y[["Z"]] / (y[["X"]] + y[["Y"]] + y[["Z"]]))
   death_X <- par[["alpha"]] * y[["X"]]
-  death_Y <- par[["alpha"]] * y[["Y"]]
   death_Z <- par[["alpha"]] * y[["Z"]]
   
-  # emigration
-  emigration_X <- par[["Ex"]] * y[["X"]]
-  emigration_Y <- par[["Ey"]] * y[["Y"]]
-  emigration_Z <- par[["Ez"]] * y[["Z"]]
-  
   # virus
-  acquisition <- par[["phi"]] * a * y[["I"]] * y[["X"]] / par[["N"]]
-  become_infective <- par[["eta"]] * y[["Y"]]
+  acquisition <- par[["phi"]] * par[["a"]] * y[["I"]] * y[["X"]] / par[["N"]]
   stop_being_infective <- par[["tau"]] * y[["Z"]]
   
   # state equations
-  dX <- birth - born_infective - death_X - emigration_X - acquisition + stop_being_infective
-  dY <- acquisition - become_infective - emigration_Y - death_Y
-  dZ <- become_infective - stop_being_infective - emigration_Z + born_infective - death_Z
+  dX <- birth - death_X - acquisition + stop_being_infective
+  dZ <- acquisition - stop_being_infective - death_Z
   
-  return(list(c(dI, #dS, 
-                dX, dY, dZ)))
+  return(list(c(dI, dX, dZ)))
 }
 
 run <- data.frame(ode(y = init_states,
