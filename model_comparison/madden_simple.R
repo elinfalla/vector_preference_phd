@@ -55,7 +55,7 @@ parms <- c(
 )
 
 
-madden_simple <- function(times, y, par) {
+madden_simple_ode <- function(times, y, par) {
   
   # PLANT EQUATIONS
   
@@ -91,7 +91,7 @@ madden_simple <- function(times, y, par) {
 
 run <- data.frame(ode(y = init_states,
                          times = times,
-                         func = madden_simple,
+                         func = madden_simple_ode,
                          parms = parms))
 
 run_long <- reshape2::melt(run, id.vars = "time")
