@@ -14,7 +14,7 @@ library(dplyr)
 ### Aphid population ODE solve
 ##############
 
-parms <- c(
+parms <- c( # IF THESE ARE CHANGED THE EQUILIBRIUM VALUES WILL CHANGE
   i = 0.1, # proportion of host plants that are infected
   v = 1, # infected plant attractiveness
   e = 1, # infected plant acceptability 
@@ -188,15 +188,15 @@ i_hat <- v*i / ((1-i) + v*i)
 Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
 Fi <- e*i_hat / (1 - i_hat*(1 - e))
 
-## coefficients (worked out by hand from dAs and dAi equations- see lab book)
-coeff_1 <- i*(a - b - theta*(1 - Fs))*(b + theta*(1 - Fi) + a)/(theta*Fi*(1 - i)) + theta*Fs*i/(1 - i)
+## coefficients (worked out by hand from dAs and dAi equations- see lab book). will give roots of Ai
+coeff_1 <- i*(a - b - theta*(1 - Fs))*(b + theta*(1 - Fi) - a)/(theta*Fi*(1 - i)) + theta*Fs*i/(1 - i)
 
 coeff_2 <- (a/K)*i*(a - b - theta*(1 - Fs))/(theta*Fi*(1 - i)) - 
   a*i^2*(b^2 + 2*b*theta*(1 - Fi) - 2*b*a + theta^2*(1 - Fi)^2 - 2*a*theta*(1 - Fi) + a^2)/(K*theta^2*(1 - i)^2*Fi^2)
 
-coeff_3 <- (a*i^2/K)*(2*b*a + 2*a*theta*(1 - Fi) - 2*a^2)/(K*theta^2*(1 - i)^2*Fi^2)
+coeff_3 <- -(a*i^2/K)*(2*b*a + 2*a*theta*(1 - Fi) - 2*a^2)/(K*theta^2*(1 - i)^2*Fi^2)
 
-coeff_4 <- a^3*i^2/(K^3*theta^2*(1 - i)^2*Fi^2)
+coeff_4 <- -a^3*i^2/(K^3*theta^2*(1 - i)^2*Fi^2)
 
 proot_equilibrium <- polyroot(c(0, coeff_1, coeff_2, coeff_3, coeff_4))
-proot_equilibrium
+proot_equilibrium # same as equilibrium Ai values for optim() method
