@@ -158,11 +158,45 @@ RHS_to_optimise <- function(aphid_pop_density, parms) {
 
 # run optim() many times from different starting values to find all possible equilibriums
 n_tests <- 100
-equilibrium <- lapply(1:n_tests, function(x) round(optim(par = runif(2, min=0, max=100), 
+optim_equilibrium <- lapply(1:n_tests, function(x) round(optim(par = runif(2, min=0, max=100), 
                                                 fn = RHS_to_optimise, 
                                                 parms = parms,
                                                 method = "L-BFGS-B")$par, 4))
 
 # filter down to unique equilibriums
-unique_equilibrium <- equilibrium[!duplicated(equilibrium)]
+unique_equilibrium <- optim_equilibrium[!duplicated(optim_equilibrium)]
 unique_equilibrium # only equilibrium where both numbers (As and Ai) are positive = 9.5, 9.5
+
+
+
+##############
+### Find aphid population equilibrium using polyroot()
+##############
+
+# define parameters
+i <- parms[["i"]]
+v <- parms[["v"]]
+e <- parms[["e"]]
+a <- parms[["a"]]
+b <- parms[["b"]]
+K <- parms[["K"]]
+theta <- parms[["theta"]]
+
+# equations
+i_hat <- v*i / ((1-i) + v*i) 
+
+Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
+Fi <- e*i_hat / (1 - i_hat*(1 - e))
+
+## coefficients (worked out by hand from dAs and dAi equations- see lab book)
+coeff_1 <- i*(a - b - theta*(1 - Fs))*(b + theta*(1 - Fi) + a)/(theta*Fi*(1 - i)) + theta*Fs*i/(1 - i)
+
+coeff_2 <- (a/K)*i*(a - b - theta*(1 - Fs))/(theta*Fi*(1 - i)) - 
+  a*i^2*(b^2 + 2*b*theta*(1 - Fi) - 2*b*a + theta^2*(1 - Fi)^2 - 2*a*theta*(1 - Fi) + a^2)/(K*theta^2*(1 - i)^2*Fi^2)
+
+coeff_3 <- (a*i^2/K)*(2*b*a + 2*a*theta*(1 - Fi) - 2*a^2)/(K*theta^2*(1 - i)^2*Fi^2)
+
+coeff_4 <- a^3*i^2/(K^3*theta^2*(1 - i)^2*Fi^2)
+
+proot_equilibrium <- polyroot(c(0, coeff_1, coeff_2, coeff_3, coeff_4))
+proot_equilibrium
