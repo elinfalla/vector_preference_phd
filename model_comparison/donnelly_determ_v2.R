@@ -3,6 +3,9 @@
 ###### RECREATION OF DETERMINISTIC MODEL BY DONNELLY ET AL. 2019 ######
 #######################################################################
 
+### This version works out the equilibrium values of As and Ai to feed into
+### the equation for di/dt, removing the need for As/dt and Ai/dt equations.
+
 rm(list=ls())
 
 # packages
@@ -13,14 +16,86 @@ library(dplyr)
 
 ### FUNCTIONS ###
 
+As_Ai_to_optimise <- function(aphid_pop_density, parms) {
+  
+  ### Function that contains the equations for As and Ai to be optimised. Will be passed to calc_A_equilibrium() 
+  ### to find the equilibrium As and Ai values
+  
+  As <- aphid_pop_density[1]
+  Ai <- aphid_pop_density[2]
+  
+  # define necessary parameters
+  i <- parms[["i"]]
+  v <- parms[["v"]]
+  e <- parms[["e"]]
+  a <- parms[["a"]]
+  b <- parms[["b"]]
+  K <- parms[["K"]]
+  theta <- parms[["theta"]]
+  
+  # equations
+  i_hat <- v*i / ((1-i) + v*i) 
+  
+  Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
+  Fi <- e*i_hat / (1 - i_hat*(1 - e))
+  
+  # equations to be minimised
+  dAs <- a*As*(1 - As/K) - b*As - theta*As*(1 - Fs) + theta*Ai*Fs*i/(1 - i)
+  dAi <- a*Ai*(1 - Ai/K) - b*Ai - theta*Ai*(1 - Fi) + theta*As*Fi*(1 - i)/i
+  
+  return(dAs^2 + dAi^2) # return sum of squares. this way the minimum value is 0 which indicates a root (equilibrium)
+}
+
+calc_A_equilibrium <- function(parms, i, n_tests) {
+  
+  ### Function to calculate As and Ai equilibrium by optimising As_Ai_to_optimise(). Returns vector of As
+  ### then Ai value
+  
+  # add current value of i as a parameter
+  parms["i"] <- i
+  
+  # run optim() many times from different starting values to find all possible equilibriums
+  optim_equilibrium <- lapply(1:n_tests, function(x) round(optim(par = runif(2, min=0, max=100), 
+                                                                 fn = As_Ai_to_optimise, 
+                                                                 parms = parms,
+                                                                 method = "L-BFGS-B")$par, 3))
+  
+  # filter down to unique equilibriums
+  unique_equilibrium <- optim_equilibrium[!duplicated(optim_equilibrium)]
+  unique_equilibrium # only equilibrium where both numbers (As and Ai) are positive = 9.5, 9.5
+  
+  # filter down to the positive (i.e. biologically possible) solution(s)
+  find_positive_solution <- function(equil) {
+    if (equil[1] > 0 && equil[2] > 0) {
+      return (T)
+    }
+    else {
+      return(F)
+    }
+  }
+  
+  positive_equilibrium <- unlist(unique_equilibrium[sapply(unique_equilibrium, find_positive_solution)==T])
+  
+  # check if multiple positive solutions
+  if (length(positive_equilibrium) > 2) {
+    # if the sum of the difference between equilibriums for As and Ai are more than 0.1 (i.e. not just a rounding)
+    # issue, stop with an error
+    if(sum(abs(diff(positive_equilibrium, lag = 2))) > 0.1) { 
+      stop("More than 1 positive solution for As and Ai values")
+    }
+  }
+  
+  return(positive_equilibrium) # return equilibrium As and Ai values
+}
+
 donnelly_ode_func <- function(times, states, parms) {
   
-  ### ODE function for deterministic Donnelly model
+  ### ODE function for deterministic Donnelly model, with As and Ai (aphids per healthy and infected plants 
+  ### respectively) assumed to be always at equilibrium. Therefore calculates equilibrium As and Ai values 
+  ### for each value of i (proportion infected plants).
   
   # STATES
   i <- states[["i"]]
-  As <- states[["As"]]
-  Ai <- states[["Ai"]]
   
   # PARAMETERS
   gamma <- parms[["gamma"]]
@@ -36,7 +111,6 @@ donnelly_ode_func <- function(times, states, parms) {
   Pacq <- parms[["Pacq"]]
   Pinoc <- parms[["Pinoc"]]
   
-  
   # DEFINE PARAMETERS NEEDED FOR STATE EQUATIONS
   
   # q = prob of surviving flight between plants (i.e. doesn't emigrate/die)
@@ -50,27 +124,22 @@ donnelly_ode_func <- function(times, states, parms) {
   # derived from analysis of markov chain (see Donnelly 2019, Appendix S1)
   xi <- (q^2*Pacq*Pinoc*i_hat*(1 - e*w)*(1 - i_hat))/(p + q*w*(1 - i_hat*(1 - e)))
   
-  # probability of settling on susceptible (Fs) and infected (Fi) plants,
-  # derived from analysis of Markov chain, see Donnelly et al. 2019, Appendix S4
-  Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
-  Fi <- e*i_hat / (1 - i_hat*(1 - e))
+  # calculate equilibrium level of As and Ai for current value of i
+  # = per plant aphid density on susceptible (As)  and infected (Ai) plants
+  As_Ai <- calc_A_equilibrium(parms, i, n_tests = 150)
+  As <- As_Ai[1] 
+  Ai <- As_Ai[2]
   
   # A = total number of aphids i.e. aphids per plant type * number of that plant type
   # i.e. S*As + I*Ai where S is number of susceptible plants and I is number of infected plants
   A <- As*(H - i*H) + Ai*(i*H)  
   
-  
-  # STATE EQUATIONS
-  # aphids - change in per plant aphid density on susceptible (As)  and infected (Ai) plants
-  # = aphid births - aphid deaths - aphid settling on other plant type + aphids moving from other plant type
-  dAs <- a*As*(1 - As/K) - b*As - theta*As*(1 - Fs) + theta*Ai*Fs*i/(1 - i)
-  dAi <- a*Ai*(1 - Ai/K) - b*Ai - theta*Ai*(1 - Fi) + theta*As*Fi*(1 - i)/i
-
+  # STATE EQUATION
   # infected plants - change in incidence of infected plants
   # = rate of aphid dispersal * mean number of transmissions - plant death
   di <- (theta*A/H)*xi - gamma*i
   
-  return(list(c(di, dAs, dAi)))
+  return(list(c(di)))
 }
 
 
@@ -106,6 +175,23 @@ vary_param_trajec <- function(init_states, times, parms, varied_parm_name, varie
   return(all_trajects)
 }
 
+#### DEFINE ALL PARAMETERS AND INITIAL STATES
+
+## donnelly param vals:
+# gamma = 20/3, # rate of recovery/death of I plants
+# b = , # aphid mortality rate per day
+# theta = 1, # aphid dispersal rate per day
+# a = , # reproduction rate per aphid per day
+# K = , # aphid reproduction limit - maximum aphids per plant (diff to donnelly_stoch_sim.R)
+# H = 400, # number host plants
+# p = , # aphid emigration/death rate per journey between plants
+# v = 1, # infected plant attractiveness
+# e = 1, # infected plant acceptability 
+# w = 0.2, # feeding rate on healthy plant
+# Pacq = 0.5, # chance of virus acquisition from infected plant
+# Pinoc = 0.5 # chance of inoculating healthy plant
+# A = 1200 ????
+
 # parameters
 parms <- c(
   gamma = 20/3, # rate of recovery/death of I plants
@@ -124,9 +210,7 @@ parms <- c(
 
 #states
 init_states <- c(
-  i = 1/parms[["H"]], # frequency of infected plants
-  As = 1200 / parms[["H"]] / 2, # per plant aphid density on average healthy plant
-  Ai = 1200 / parms[["H"]] / 2 # per plant aphid density on average infected plant
+  i = 1/parms[["H"]] # frequency of infected plants
 )
 
 # timeframe
