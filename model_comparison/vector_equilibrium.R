@@ -3,6 +3,12 @@
 ###### DETERMINING APHID POPULATION EQUILIBRIUM -  FROM DONNELLY ET AL. 2019 ######
 ###################################################################################
 
+### Script to test methods of finding an equilibrium value for dAs/dt and dAi/dt
+### (rate of change of per plant aphid density on susceptible and infected plants
+### respectively). Methods: ODE solve, optim(), polyroot(), fsolve().
+
+rm(list=ls())
+
 # packages
 library(deSolve)
 library(ggplot2)
@@ -16,8 +22,8 @@ library(dplyr)
 
 parms <- c( # IF THESE ARE CHANGED THE EQUILIBRIUM VALUES WILL CHANGE
   i = 0.1, # proportion of host plants that are infected
-  v = 1, # infected plant attractiveness
-  e = 1, # infected plant acceptability 
+  v = 5, # infected plant attractiveness
+  e = 3, # infected plant acceptability 
   a = 2, # reproduction rate per aphid per day
   b = 0.1, # aphid mortality rate per day
   K = 10, # aphid reproduction limit - maximum aphids per plant (diff to donnelly_stoch_sim.R)
@@ -28,6 +34,8 @@ init_states <- c(
   As = 12, # per plant aphid density on average healthy plant
   Ai = 12 # per plant aphid density on average infected plant
 )
+
+times <- seq(0, 10, by = 0.2)
 
 aphid_pop_ode <- function(times, y, parms) {
   
@@ -121,7 +129,70 @@ for (run in 1:(num_runs - 1)) {
 
 aphid_plot
 
+## Check that the equilibrium doesn't change for varying i
+i_vals <- c(0.05, 0.1, 0.25, 0.5, 0.75, 0.98)
 
+vary_i_vals <- function(parms, init_states, times, i_vals) {
+  
+  ### Function that runs ODE with varying values of i (proportion infected plants) and checks the
+  ### equilibrium values of As and Ai don't change
+  
+  end_vals <- vector(mode = "list", length = length(i_vals))
+  
+  for (run in 1:length(i_vals)) {
+    
+    parms[["i"]] <- i_vals[run]
+
+    trajectory <- data.frame(ode(y = init_states, 
+                                 times = times, 
+                                 parms = parms, 
+                                 func = aphid_pop_ode))
+    end_As <- round(trajectory[nrow(trajectory), "As"], 3)
+    end_Ai <- round(trajectory[nrow(trajectory), "Ai"], 3)
+    
+    end_vals[[run]] <- c(end_As, end_Ai)
+  
+    trajectory_long <- reshape2::melt(trajectory, id.vars = "time")
+    names(trajectory_long) <- c("time", "compartment", "value")
+    
+    # create iterative plot that plots trajectories for each i value
+    trajec_colours <- rainbow(length(i_vals))
+    names(trajec_colours) <- as.character(i_vals)
+
+    if (run == 1) {
+      trajecs_plot <- ggplot(data = trajectory_long, aes(x = time, y = value, group = compartment)) +
+        geom_line(color = trajec_colours[run]#as.character(i_vals[run])
+                  )
+    } else {
+      trajecs_plot <- trajecs_plot +
+        geom_line(data = trajectory_long, aes(x = time, y = value, group = compartment), color = trajec_colours[run]
+                  #as.character(i_vals[run])
+                  )
+    }
+   }
+  # # give plot a legend
+  # trajecs_plot <- trajecs_plot +
+  #   scale_color_manual(name = 'i value',
+  #                      breaks = as.character(i_vals),
+  #                      values = trajec_colours)
+  
+  # narrow down end vals (equilibriums) to only unique values
+  unique_equilibriums <- end_vals[!duplicated(end_vals)]
+  
+  # print message about number of equilibriums found
+  if (length(unique_equilibriums) == 1) {
+    print("Equilibrium doesn't change")
+  } else{
+    print(paste0("Equilibrium changes: number i vals tested = ", length(i_vals), 
+                 ", number equilibriums = ", length(unique_equilibriums)))
+  }
+  
+  return(list(unique_equilibriums, trajecs_plot))
+}
+
+vary_i_equilibriums <- vary_i_vals(parms, init_states, times, i_vals)
+vary_i_equilibriums[[1]] # equilibrium values
+vary_i_equilibriums[[2]] # plot of all trajectories
 
 ##############
 ### Find aphid population equilibrium using optim()
@@ -167,6 +238,18 @@ optim_equilibrium <- lapply(1:n_tests, function(x) round(optim(par = runif(2, mi
 unique_equilibrium <- optim_equilibrium[!duplicated(optim_equilibrium)]
 unique_equilibrium # only equilibrium where both numbers (As and Ai) are positive = 9.5, 9.5
 
+# filter down to the positive (i.e. biologically possible) solution(s)
+find_positive_solution <- function(eq) {
+  if (eq[1] > 0 && eq[2] > 0) {
+    return (T)
+  }
+  else {
+    return(F)
+  }
+}
+
+positive_equilibrium <- unlist(unique_equilibrium[sapply(unique_equilibrium, find_positive_solution)==T])
+positive_equilibrium
 
 
 ##############
@@ -200,3 +283,23 @@ coeff_4 <- -a^3*i^2/(K^3*theta^2*(1 - i)^2*Fi^2)
 
 proot_equilibrium <- polyroot(c(0, coeff_1, coeff_2, coeff_3, coeff_4))
 proot_equilibrium # same as equilibrium Ai values for optim() method
+
+##############
+### Find aphid population equilibrium using fsolve()
+##############
+
+library(pracma) # contains fsolve() function
+
+fsolve(RHS_to_optimise, c(2,2), parms = parms)
+
+# run fsolve() many times from different starting values to find all possible equilibriums
+n_tests <- 100
+fsolve_equilibrium <- lapply(1:n_tests, function(x) round(fsolve(RHS_to_optimise, 
+                                                                 runif(2, min=0, max=20), 
+                                                                 parms = parms,
+                                                                 maxiter = 300)$x, 4))
+
+# filter down to unique equilibriums
+fsolve_unique_equilibrium <- fsolve_equilibrium[!duplicated(fsolve_equilibrium)]
+fsolve_unique_equilibrium # only equilibrium where both numbers (As and Ai) are positive = 9.5, 9.5
+
