@@ -21,7 +21,7 @@ times <- seq(0, 20, by = 0.2)
 # INITIAL STATES
 P <- 1200 # total number of vectors
 N <- 400 # number of plants
-I <- 1 # number of infected plants
+I <- 10 # number of infected plants
 
 init_states <- c(
   I = I, # number of infected plants
@@ -31,7 +31,7 @@ init_states <- c(
 )
 
 # PARAMETERS
-phi <- 1 # plants visited per day by an insect
+phi <- 4 # plants visited per day by an insect
 alpha <- 0.2 # mortality rate
 k1 <- 1/0.021
 T <- 0.5/phi

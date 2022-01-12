@@ -29,14 +29,14 @@ parms <- c(
   v = v, # infected plant attractiveness
   e = e, # infected plant acceptability 
   w = 0.2, # feeding rate on healthy plant
-  Pacq = 1, # chance of virus acquisition from infected plant
+  Pacq = 1, # chance of virus acquisition by vector from infected plant
   Pinoc = 1, # chance of inoculating healthy plant
   A = 1200 # vector population size
 )
 
 #states
 init_states <- c(
-  i = 1/parms[["H"]] # frequency of infected plants
+  i = 10/parms[["H"]] # frequency of infected plants
 )
 
 # timeframe
@@ -81,8 +81,37 @@ donnelly_simple_ode <- function(times, states, parms) {
   return(list(di))
 }
 
-
-
+vary_param_trajec <- function(init_states, times, parms, varied_parm_name, varied_parm_vals) {
+  
+  # function to run the ODE multiple times with one parameter varying, as specified by user.
+  # returns data frame of all runs
+  
+  # initialise output data frame
+  all_trajects <- data.frame(time = numeric(),
+                             compartment = character(),
+                             value = numeric(),
+                             param_val = numeric())
+  
+  for (run in 1:length(varied_parm_vals)) {
+    
+    parms[[varied_parm_name]] <- varied_parm_vals[run]
+    
+    trajectory <- data.frame(ode(y = init_states, 
+                                 times = times, 
+                                 parms = parms, 
+                                 func = donnelly_simple_ode))
+    
+    trajectory_long <- reshape2::melt(trajectory, id.vars="time")
+    
+    # add the value of the varying parameter as an extra column
+    trajectory_long$param_val <- rep(varied_parm_vals[run], times=nrow(trajectory_long))
+    
+    # add to dataframe of all trajectories
+    all_trajects <- rbind(all_trajects, trajectory_long)
+  }
+  
+  return(all_trajects)
+}
 
 ########
 # run epidemic with default parameters (as donnelly et al. 2019)
@@ -98,3 +127,25 @@ plant_trajec <- ggplot(data=trajectory, aes(x = time, y = i)) +
   labs(x = "Time (days)", y = "Frequency of infected plants, i")
 plant_trajec
 
+#VARY E (plant acceptability)
+e_vals <- c(0.25, 0.5, 1, 1.5, 2)
+
+e_trajecs <- vary_param_trajec(init_states, times, parms, "e", e_vals)
+
+# plot output
+e_vals_plot <- ggplot(data=e_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
+  geom_line() +
+  labs(col = "e value")
+e_vals_plot
+
+# VARY V (plant attractiveness)
+v_vals <- c(1, 3, 0.5)
+
+long_times <- seq(0, 20, by=0.5)
+v_trajecs <- vary_param_trajec(init_states, long_times, parms, "v", v_vals)
+
+# plot output
+v_vals_plot <- ggplot(data=v_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
+  geom_line() +
+  labs(col = "v value")
+v_vals_plot
