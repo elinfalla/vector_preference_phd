@@ -3,7 +3,7 @@
 ###### RECREATION OF DETERMINISTIC MODEL BY DONNELLY ET AL. 2019 ######
 #######################################################################
 
-### This version works out the equilibrium values of As and Ai to feed into
+### This version (v2) works out the equilibrium values of As and Ai to feed into
 ### the equation for di/dt, removing the need for As/dt and Ai/dt equations.
 
 rm(list=ls())
@@ -46,7 +46,7 @@ As_Ai_to_optimise <- function(aphid_pop_density, parms) {
   return(dAs^2 + dAi^2) # return sum of squares. this way the minimum value is 0 which indicates a root (equilibrium)
 }
 
-calc_A_equilibrium <- function(parms, i, n_tests) {
+calc_A_equilibrium_optim <- function(parms, i, n_tests) {
   
   ### Function to calculate As and Ai equilibrium by optimising As_Ai_to_optimise(). Returns vector of As
   ### then Ai value
@@ -88,6 +88,57 @@ calc_A_equilibrium <- function(parms, i, n_tests) {
   return(positive_equilibrium) # return equilibrium As and Ai values
 }
 
+calc_A_equilibrium <- function(coeff_1, coeff_2, coeff_3, coeff_4, parms, states, i_hat) {
+  
+  # define states
+  i <- states[["i"]]
+  
+  # define parameters
+  e <- parms[["e"]]
+  a <- parms[["a"]]
+  b <- parms[["b"]]
+  K <- parms[["K"]]
+  theta <- parms[["theta"]]
+  
+  # probability of settling on susceptible (Fs) and infected (Fi) plants,
+  # derived from analysis of Markov chain, see Donnelly et al. 2019, Appendix S4
+  Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
+  Fi <- e*i_hat / (1 - i_hat*(1 - e))
+  
+  ## define coefficients 
+  # (worked out by hand from dAs and dAi equations- see lab book). will give roots of Ai
+  coeff_1 <- i*(a - b - theta*(1 - Fs))*(b + theta*(1 - Fi) - a)/(theta*Fi*(1 - i)) + theta*Fs*i/(1 - i)
+  
+  coeff_2 <- (a/K)*i*(a - b - theta*(1 - Fs))/(theta*Fi*(1 - i)) - 
+    a*i^2*(b^2 + 2*b*theta*(1 - Fi) - 2*b*a + theta^2*(1 - Fi)^2 - 2*a*theta*(1 - Fi) + a^2)/(K*theta^2*(1 - i)^2*Fi^2)
+  
+  coeff_3 <- -(a*i^2/K)*(2*b*a + 2*a*theta*(1 - Fi) - 2*a^2)/(K*theta^2*(1 - i)^2*Fi^2)
+  
+  coeff_4 <- -a^3*i^2/(K^3*theta^2*(1 - i)^2*Fi^2)
+  
+  
+  # get Ai equilibrium values
+  Ai_equilibriums <- polyroot(c(0, coeff_1, coeff_2, coeff_3, coeff_4))
+  
+  # subset to those that have no imaginary part, then remove imaginary part (as it is 0)
+  Ai_equilibriums <- Ai_equilibriums[Im(zapsmall(Ai_equilibriums)) == 0]
+  Ai_equilibriums <- Re(Ai_equilibriums)
+  
+  # for each Ai equilibrium, calculate value of As (equation calculated manually - see lab book)
+  As_equilibriums <- i*(b*Ai_equilibriums + theta*Ai_equilibriums*(1 - Fi) - a*Ai_equilibriums*(1-Ai_equilibriums/K)) / 
+    (theta*Fi*(1-i))
+  
+  # find equilibrium where both As and Ai are positive i.e. biologically possible equilibrium
+  Ai <- Ai_equilibriums[which(Ai_equilibriums > 0 & As_equilibriums > 0)]
+  As <- As_equilibriums[which(Ai_equilibriums > 0 & As_equilibriums > 0)]
+  
+  # if multiple positive equilibriums, stop with error
+  if (length(Ai) > 1 | length(As) > 1) {
+    stop("multiple positive As, Ai equilibriums")
+  }
+  return(c(As, Ai))
+}
+
 donnelly_ode_func <- function(times, states, parms) {
   
   ### ODE function for deterministic Donnelly model, with As and Ai (aphids per healthy and infected plants 
@@ -124,11 +175,21 @@ donnelly_ode_func <- function(times, states, parms) {
   # derived from analysis of markov chain (see Donnelly 2019, Appendix S1)
   xi <- (q^2*Pacq*Pinoc*i_hat*(1 - e*w)*(1 - i_hat))/(p + q*w*(1 - i_hat*(1 - e)))
   
+
+  
   # calculate equilibrium level of As and Ai for current value of i
   # = per plant aphid density on susceptible (As)  and infected (Ai) plants
-  As_Ai <- calc_A_equilibrium(parms, i, n_tests = 150)
-  As <- As_Ai[1] 
+  
+
+  # 2. plug into calc_A_equilibrium function
+  As_Ai <- calc_A_equilibrium(coeff_1, coeff_2, coeff_3, coeff_4, parms, states, i_hat)
+  As <- As_Ai[1]
   Ai <- As_Ai[2]
+  
+  ### OLD WAY USING OPTIM
+  # As_Ai <- calc_A_equilibrium_optim(parms, i, n_tests = 150)
+  # As <- As_Ai[1] 
+  # Ai <- As_Ai[2]
   
   # A = total number of aphids i.e. aphids per plant type * number of that plant type
   # i.e. S*As + I*Ai where S is number of susceptible plants and I is number of infected plants
@@ -194,18 +255,18 @@ vary_param_trajec <- function(init_states, times, parms, varied_parm_name, varie
 
 # parameters
 parms <- c(
-  gamma = 20/3, # rate of recovery/death of I plants
+  gamma = 3/20, # rate of recovery/death of I plants
   b = 0.1, # aphid mortality rate per day
   theta = 1, # aphid dispersal rate per day
   a = 2, # reproduction rate per aphid per day
   K = 10, # aphid reproduction limit - maximum aphids per plant (diff to donnelly_stoch_sim.R)
-  H = 400, # number host plants
+  H = 600, # number host plants
   p = 0.2, # aphid emigration/death rate per journey between plants
   v = 1, # infected plant attractiveness
   e = 1, # infected plant acceptability 
   w = 0.2, # feeding rate on healthy plant
-  Pacq = 1, # chance of virus acquisition from infected plant
-  Pinoc = 1 # chance of inoculating healthy plant
+  Pacq = 0.5, # chance of virus acquisition from infected plant
+  Pinoc = 0.5 # chance of inoculating healthy plant
 )
 
 #states
@@ -214,7 +275,7 @@ init_states <- c(
 )
 
 # timeframe
-times <- seq(0, 10, by = 0.2)
+times <- seq(0, 8, by = 0.2)
 
 ########
 # run epidemic with default parameters (as donnelly et al. 2019)
@@ -227,24 +288,19 @@ trajectory <- data.frame(ode(y = init_states,
 trajectory_long <- reshape2::melt(trajectory, id.vars="time")
 names(trajectory_long) <- c("time", "compartment", "number")
 
-# plot trajectory of infected plants and number of aphids
+# plot trajectory of infected plants
 plant_trajec <- ggplot(data=trajectory_long %>% filter(compartment == "i"), 
                        aes(x = time, y = number)) +
   geom_line() +
   labs(x = "Time (days)", y = "Frequency of infected plants, i")
 plant_trajec
 
-aphid_trajec <- ggplot(data=trajectory_long %>% filter(!(compartment == "i")),
-                       aes(x = time, y = number, col = compartment)) +
-  geom_line()
-aphid_trajec
-
 ##########
 # run epidemic with varying values of e and v
 ##########
 
 #VARY E (plant acceptability)
-e_vals <- c(0.25, 0.5, 1, 1.5, 2)
+e_vals <- c(0.25, 1, 2)
 
 e_trajecs <- vary_param_trajec(init_states, times, parms, "e", e_vals)
 
@@ -255,13 +311,12 @@ e_vals_plot <- ggplot(data=e_trajecs %>% filter(variable == "i"), aes(x = time, 
 e_vals_plot
 
 # VARY V (plant attractiveness)
-v_vals <- c(1, 3, 0.6, 0.55)
+v_vals <- c(1, 3, 0.5)
 
-long_times <- seq(0, 20, by=0.5)
-v_trajecs <- vary_param_trajec(init_states, long_times, parms, "v", v_vals)
+v_trajecs <- vary_param_trajec(init_states, times, parms, "v", v_vals)
 
 # plot output
 v_vals_plot <- ggplot(data=v_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
   geom_line() +
-  labs(col = "v value")
+  labs(col = "v value", y = "frequency of infected plants, i")
 v_vals_plot

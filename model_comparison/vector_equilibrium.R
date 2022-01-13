@@ -22,13 +22,14 @@ library(dplyr)
 
 parms <- c( # IF THESE ARE CHANGED THE EQUILIBRIUM VALUES WILL CHANGE
   i = 0.1, # proportion of host plants that are infected
-  v = 5, # infected plant attractiveness
-  e = 3, # infected plant acceptability 
+  v = 1, # infected plant attractiveness
+  e = 1, # infected plant acceptability 
   a = 2, # reproduction rate per aphid per day
   b = 0.1, # aphid mortality rate per day
   K = 10, # aphid reproduction limit - maximum aphids per plant (diff to donnelly_stoch_sim.R)
   theta = 1 # aphid dispersal rate per day
 )
+
 
 init_states <- c(
   As = 12, # per plant aphid density on average healthy plant
