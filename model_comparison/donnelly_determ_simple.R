@@ -16,9 +16,9 @@ library(reshape2)
 library(dplyr)
 
 # FIXED parameters
-p = 0 # aphid emigration/death rate per journey between plants
-v = 1 # infected plant attractiveness
-e = 1 # infected plant acceptability 
+p <- 0 # aphid emigration/death rate per journey between plants
+v <- 1 # infected plant attractiveness
+e <- 1 # infected plant acceptability 
 
 # parameters
 parms <- c(
@@ -36,7 +36,7 @@ parms <- c(
 
 #states
 init_states <- c(
-  i = 10/parms[["H"]] # frequency of infected plants
+  i = 1/parms[["H"]] # frequency of infected plants
 )
 
 # timeframe

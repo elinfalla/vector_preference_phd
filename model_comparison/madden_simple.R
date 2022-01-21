@@ -4,8 +4,9 @@
 #########################################################
 
 ### Simplified version of model by Madden et al. 2000 to make it more comparable to model by Donnelly et al. 2019.
-### No vector immigration or emigration, plants are represented by an SI rather than an SEIR model, vectors represented by an 
-### SI rather than SEI model. Vectors cannot be born infective (as this model represents NPT viruses).
+### Constant vector population size: no vector immigration, emigration, birth or death. Plants are represented by 
+### an SI rather than an SEIR model, vectors represented by an SI rather than SEI model. Vectors cannot be born 
+### infective (as this model represents NPT viruses).
 
 rm(list=ls())
 
@@ -21,7 +22,7 @@ times <- seq(0, 20, by = 0.2)
 # INITIAL STATES
 P <- 1200 # total number of vectors
 N <- 400 # number of plants
-I <- 10 # number of infected plants
+I <- 1 # number of infected plants
 
 init_states <- c(
   I = I, # number of infected plants
@@ -30,12 +31,22 @@ init_states <- c(
   Z = 0 # number infective insects
 )
 
+## DONNELLY (2019) MODEL PARAMETERS - for determination of phi
+theta <- 1
+w <- 0.2
+
+
 # PARAMETERS
-phi <- 4 # plants visited per day by an insect
 alpha <- 0.2 # mortality rate
 k1 <- 1/0.021
-T <- 0.5/phi
+T <- 0.5 # usually 0.5/phi
 lamda = 1/0.021
+tau <- 1/0.25
+b <- 1 #- exp(-k1 * T)
+a <- 1 #- exp(-lamda * T)
+
+phi <- sqrt(theta*tau*(1-w)/(w#*a*b
+                             )) # plants visited per day by an insect
 
 parms <- c(
   N = N, # number of host plants (equivalent to K in original Madden model)
@@ -48,9 +59,9 @@ parms <- c(
   c = 20/3/2, # natural plant death rate (equivalent to beta in original Madden model)
   d = 20/3/2, # plant death due to infection
   v_t = alpha * (init_states[["X"]] + init_states[["Z"]]), # birth rate of vectors per day
-  tau = 1/0.25, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
-  b = 1 - exp(-k1 * T), # prob of plant inoculation per infective insect visit 
-  a = 1 - exp(-lamda * T) # probability of vector acquisition of virus from an infected plant per visit
+  tau = tau, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
+  b = b, # prob of plant inoculation per infective insect visit 
+  a = a # probability of vector acquisition of virus from an infected plant per visit
   
 )
 
@@ -73,18 +84,12 @@ madden_simple_ode <- function(times, y, par) {
   
   # VECTOR EQUATIONS
   
-  # birth and death
-  birth <- par[["v_t"]]
-  death_X <- par[["alpha"]] * y[["X"]]
-  death_Z <- par[["alpha"]] * y[["Z"]]
-  
-  # virus
   acquisition <- par[["phi"]] * par[["a"]] * y[["I"]] * y[["X"]] / par[["N"]]
   stop_being_infective <- par[["tau"]] * y[["Z"]]
   
   # state equations
-  dX <- birth - death_X - acquisition + stop_being_infective
-  dZ <- acquisition - stop_being_infective - death_Z
+  dX <- - acquisition + stop_being_infective
+  dZ <- acquisition - stop_being_infective
   
   return(list(c(dI, dX, dZ)))
 }
