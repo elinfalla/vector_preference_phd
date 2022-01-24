@@ -22,6 +22,7 @@ library(reshape2)
 library(dplyr)
 library(gridExtra)
 library(grid)
+library(gridtext)
 
 #### DEFINE MADDEN ODE
 madden_simple_ode <- function(times, y, par) {
@@ -85,7 +86,7 @@ donnelly_simple_ode <- function(times, states, parms) {
 }
 
 # define timeframe
-times <- seq(0, 20, by = 0.2)
+times <- seq(0, 40, by = 0.4)
 
 # FIXED parameters (from Donnelly model)
 p <- 0 # aphid emigration/death rate per journey between plants
@@ -313,18 +314,18 @@ sensitivity_analysis <- function(parms_mad, parms_don, init_states_don, init_sta
 }
   
 
-analysis_parms_don <- list(gamma = 0:5,
-                           theta = 0:5,
-                           w = seq(0.01, 1, by = 0.2),
-                           Pacq = seq(0, 1, by = 0.2),
-                           Pinoc = seq(0, 1, by = 0.2))
+analysis_parms_don <- list(theta = seq(0, 20, length.out = 30),
+                           w = seq(0.01, 1, length.out = 30),
+                           Pacq = seq(0, 1, length.out = 30),
+                           Pinoc = seq(0, 1, length.out = 30),
+                           gamma = seq(0, 20, length.out = 30))
 
-analysis_parms_mad <- list(tau = 0:5,
-                           a = seq(0, 1, by = 0.2),
-                           b = seq(0, 1, by = 0.2),
-                           phi = seq(0, 20, length.out = 5),
-                           c = 0:5,
-                           d = 0:5)
+analysis_parms_mad <- list(phi = seq(0, 20, length.out = 30),
+                           tau = seq(0, 20, length.out = 30),
+                           a = seq(0, 1, length.out = 30),
+                           b = seq(0, 1, length.out = 30),
+                           c = seq(0, 20, length.out = 30),
+                           d = seq(0, 20, length.out = 30))
 
 
 sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
@@ -334,44 +335,60 @@ sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
                                           times, 
                                           parms)
 
-
-model_names <- c("Madden", "Donnelly")
-
-
+###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
 don_res_only <- sens_analysis_res %>%
   filter(model == "Donnelly")
 mad_res_only <- sens_analysis_res %>%
   filter(model == "Madden")
 
 don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
-                                                                                 aes(x = param_val, 
+                                                                                 aes(x = parm_val, 
                                                                                      y = final_I)) +
                             geom_line() +
                             labs(x = p))
 
 mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
-                                                                             aes(x = param_val, 
+                                                                             aes(x = parm_val, 
                                                                                  y = final_I)) +
                             geom_line() +
                             labs(x = p))
   
+# create table to be given alongside graphs giving default parameter values
+parms_table <- round(data.frame(parms[names(parms) != "k1" &
+                                     names(parms) != "lamda" &
+                                     names(parms) != "T"]), 2)
+parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
 
-gridExtra::grid.arrange(don_model_plots[[1]], 
+# ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
+don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]], 
                         don_model_plots[[2]], 
                         don_model_plots[[3]],
                         don_model_plots[[4]],
                         don_model_plots[[5]], 
-                        grid.rect(gp=gpar(col="white")),
-                        layout_matrix = 
-                        heights = (rep(2.5, 3)))
+                        grid.rect(gp=gpar(col="white")), # empty space
+                        nrow = 3, ncol = 2)
 
-gridExtra::grid.arrange(mad_model_plots[[1]], 
+mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]], 
                         mad_model_plots[[2]], 
                         mad_model_plots[[3]],
                         mad_model_plots[[4]],
                         mad_model_plots[[5]], 
                         mad_model_plots[[6]],
-                        heights = (rep(2.5, 3)))
+                        nrow = 3, ncol = 2)
 
+layout <- rbind(c(1,3),
+                c(2,4))
+title <- textbox_grob("Simple models comparison - no vector dynamics or preference", 
+                      gp = gpar(fontface = "bold",
+                                fontsize = 13),
+                      padding = unit(c(0, 1, 0, 1), "cm"))
 
-
+pdf(file = "sens_analysis_simple_models.pdf")
+all_plots <- gridExtra::grid.arrange(don_plots, 
+                                     mad_plots,
+                                     title,
+                                     parms_grob,
+                                     widths = c(3, 1),
+                                     layout_matrix = layout)
+all_plots
+dev.off()
