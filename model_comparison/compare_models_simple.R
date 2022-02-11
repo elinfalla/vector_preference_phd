@@ -406,18 +406,12 @@ theta_vals <- list(theta = seq(0, upper_lim, length.out = num_parm_runs))
 phi_vals <- list(phi = seq(0, upper_lim, length.out = num_parm_runs))
 
 
-theta_phi_res <- sensitivity_analysis(parms_mad = phi_vals,
+theta_phi_data <- sensitivity_analysis(parms_mad = phi_vals,
                                           parms_don = theta_vals,
                                           init_states_don, 
                                           init_states_mad, 
                                           times, 
                                           parms)
-
-
-
-# subset data
-theta_phi_data <- theta_phi_res %>% 
-  filter(parm_name == "theta" | parm_name == "phi")
 
 plot_reverse_final_I <- ggplot(data = theta_phi_data, aes(x = final_I, y = parm_val)) +
   geom_line() +
@@ -456,13 +450,13 @@ phi_upper_lim <- phi_threshold[2, "parm_val"]
 theta_lower_lim <- theta_threshold[1, "parm_val"]
 theta_upper_lim <- theta_threshold[2, "parm_val"]
 
-theta_vals <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
+theta_vals_condensed <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
 
-phi_vals <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
+phi_vals_condensed <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
 
 
-epidemic_threshold_res <- sensitivity_analysis(parms_mad = phi_vals,
-                                      parms_don = theta_vals,
+epidemic_threshold_res <- sensitivity_analysis(parms_mad = phi_vals_condensed,
+                                      parms_don = theta_vals_condensed,
                                       init_states_don, 
                                       init_states_mad, 
                                       times, 
@@ -477,3 +471,47 @@ theta_subset <- out [[2]]
 
 phi_subset[2, "parm_val"] # phi = 2.887 when final_I is first >0
 theta_subset[2, "parm_val"] # theta = 0.541 when final_I is first >0
+
+### relationship between phi and theta depends on w (feeding rate)
+# w = 0.5 gives expected value of 1 visit per dispersal, making phi and theta equivalent
+# see lab book for explanation
+
+parms_new <- parms
+parms_new["w"] <- 0.5
+
+new_w_res <- sensitivity_analysis(parms_mad = phi_vals,
+                                      parms_don = theta_vals,
+                                      init_states_don, 
+                                      init_states_mad, 
+                                      times, 
+                                      parms_new)
+w_plot_final_I <- ggplot(data = new_w_res, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  facet_wrap(~parm_name)
+w_plot_final_I
+
+grid.arrange(plot_final_I, w_plot_final_I)
+
+### RUN DONNELLY EPIDEMIC
+trajectory_don <- data.frame(ode(y = init_states_don,
+                             times = times,
+                             parms = parms,
+                             func = donnelly_simple_ode))
+
+# plot trajectory of infected plants and number of aphids
+don_plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
+  geom_line() +
+  labs(x = "Time (days)",
+       y = "Number of infected plants, I")
+
+# run with w = 0.5
+trajectory_don_w <- data.frame(ode(y = init_states_don,
+                                 times = times,
+                                 parms = parms_new,
+                                 func = donnelly_simple_ode))
+
+# plot trajectory of infected plants and number of aphids
+don_plant_trajec_w <- ggplot(data = trajectory_don_w, aes(x = time, y = I)) +
+  geom_line() +
+  labs(x = "Time (days)",
+       y = "Number of infected plants, I")
