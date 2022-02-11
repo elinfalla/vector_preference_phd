@@ -4,7 +4,7 @@
 
 ### MADDEN MODEL:
 ### Simplified version of model by Madden et al. 2000 to make it more comparable to model by Donnelly et al. 2019.
-### No vector immigration or emigration, plants are represented by an SI rather than an SEIR model, vectors 
+### No vector dynamics (immigration, emigration birth, death), plants are represented by an SI rather than an SEIR model, vectors 
 ### represented by an SI rather than SEI model. Vectors cannot be born infective (as this model represents 
 ### NPT viruses).
 
@@ -376,8 +376,10 @@ mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]],
                         mad_model_plots[[6]],
                         nrow = 3, ncol = 2)
 
-layout <- rbind(c(1,3),
-                c(2,4))
+layout <- rbind(c(1,1,3),
+                c(1,1,4),
+                c(2,2,4),
+                c(2,2,4))
 title <- textbox_grob("Simple models comparison - no vector dynamics or preference", 
                       gp = gpar(fontface = "bold",
                                 fontsize = 13),
@@ -388,7 +390,6 @@ all_plots <- gridExtra::grid.arrange(don_plots,
                                      mad_plots,
                                      title,
                                      parms_grob,
-                                     widths = c(3, 1),
                                      layout_matrix = layout)
 all_plots
 dev.off()
