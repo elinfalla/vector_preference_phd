@@ -313,19 +313,20 @@ sensitivity_analysis <- function(parms_mad, parms_don, init_states_don, init_sta
   return(sen_analysis_df) 
 }
   
+num_parm_runs <- 100
 
-analysis_parms_don <- list(theta = seq(0, 20, length.out = 30),
-                           w = seq(0.01, 1, length.out = 30),
-                           Pacq = seq(0, 1, length.out = 30),
-                           Pinoc = seq(0, 1, length.out = 30),
-                           gamma = seq(0, 20, length.out = 30))
+analysis_parms_don <- list(theta = seq(0, 20, length.out = num_parm_runs),
+                           w = seq(0.01, 1, length.out = num_parm_runs),
+                           Pacq = seq(0, 1, length.out = num_parm_runs),
+                           Pinoc = seq(0, 1, length.out = num_parm_runs),
+                           gamma = seq(0, 20, length.out = num_parm_runs))
 
-analysis_parms_mad <- list(phi = seq(0, 20, length.out = 30),
-                           tau = seq(0, 20, length.out = 30),
-                           a = seq(0, 1, length.out = 30),
-                           b = seq(0, 1, length.out = 30),
-                           c = seq(0, 20, length.out = 30),
-                           d = seq(0, 20, length.out = 30))
+analysis_parms_mad <- list(phi = seq(0, 20, length.out = num_parm_runs),
+                           tau = seq(0, 20, length.out = num_parm_runs),
+                           a = seq(0, 1, length.out = num_parm_runs),
+                           b = seq(0, 1, length.out = num_parm_runs),
+                           c = seq(0, 20, length.out = num_parm_runs),
+                           d = seq(0, 20, length.out = num_parm_runs))
 
 
 sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
@@ -385,6 +386,7 @@ title <- textbox_grob("Simple models comparison - no vector dynamics or preferen
                                 fontsize = 13),
                       padding = unit(c(0, 1, 0, 1), "cm"))
 
+# create pdf file to print plot to
 pdf(file = "sens_analysis_simple_models.pdf")
 all_plots <- gridExtra::grid.arrange(don_plots, 
                                      mad_plots,
@@ -393,3 +395,85 @@ all_plots <- gridExtra::grid.arrange(don_plots,
                                      layout_matrix = layout)
 all_plots
 dev.off()
+
+### INVESTIGATE RELATIONSHIP BETWEEN THETA AND PHI
+## theta = Donnelly model, aphid dispersal rate
+## phi = Madden model, number plants visited per day by vector
+
+upper_lim <- 50
+theta_vals <- list(theta = seq(0, upper_lim, length.out = num_parm_runs))
+
+phi_vals <- list(phi = seq(0, upper_lim, length.out = num_parm_runs))
+
+
+theta_phi_res <- sensitivity_analysis(parms_mad = phi_vals,
+                                          parms_don = theta_vals,
+                                          init_states_don, 
+                                          init_states_mad, 
+                                          times, 
+                                          parms)
+
+
+
+# subset data
+theta_phi_data <- theta_phi_res %>% 
+  filter(parm_name == "theta" | parm_name == "phi")
+
+plot_reverse_final_I <- ggplot(data = theta_phi_data, aes(x = final_I, y = parm_val)) +
+  geom_line() +
+  facet_wrap(~parm_name)
+plot_reverse_final_I
+
+plot_final_I <- ggplot(data = theta_phi_data, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  facet_wrap(~parm_name)
+plot_final_I
+
+# find point at which epidemic takes off (final_I > 0) for phi and theta
+find_epidemic_threshold <- function(phi_data, theta_data) {
+  
+  phi_index <- match(TRUE, phi_data$final_I > 0) # finds first instance of final_I > 0
+  theta_index <- match(TRUE, theta_data$final_I > 0)
+  
+  # return rows of data around the threshold
+  phi_subset <- phi_data[(phi_index-1):phi_index,]
+  theta_subset <- theta_data[(theta_index-1):theta_index,]
+  
+  return(list(phi_subset, theta_subset))
+}
+
+phi_data <- theta_phi_data %>% filter(parm_name == "phi")
+theta_data <- theta_phi_data %>% filter(parm_name == "theta")
+
+out <- find_epidemic_threshold(phi_data, theta_data)
+phi_threshold <- out[[1]]
+theta_threshold <- out[[2]]
+
+# run analysis between these values of the parms to find exact point at which final_I > 0
+phi_lower_lim <- phi_threshold[1, "parm_val"]
+phi_upper_lim <- phi_threshold[2, "parm_val"]
+
+theta_lower_lim <- theta_threshold[1, "parm_val"]
+theta_upper_lim <- theta_threshold[2, "parm_val"]
+
+theta_vals <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
+
+phi_vals <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
+
+
+epidemic_threshold_res <- sensitivity_analysis(parms_mad = phi_vals,
+                                      parms_don = theta_vals,
+                                      init_states_don, 
+                                      init_states_mad, 
+                                      times, 
+                                      parms)
+
+phi_data <- epidemic_threshold_res %>% filter(parm_name == "phi")
+theta_data <- epidemic_threshold_res %>% filter(parm_name == "theta")
+
+out <- find_epidemic_threshold(phi_data, theta_data)
+phi_subset <- out[[1]]
+theta_subset <- out [[2]]
+
+phi_subset[2, "parm_val"] # phi = 2.887 when final_I is first >0
+theta_subset[2, "parm_val"] # theta = 0.541 when final_I is first >0
