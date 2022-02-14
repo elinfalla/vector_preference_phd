@@ -289,7 +289,7 @@ sensitivity_analysis <- function(parms_mad, parms_don, init_states_don, init_sta
   
   for (i in 1:length(parms_mad)) {
     
-    output <- vary_param_mad(init_states_mad, times, parms,
+    output <- vary_param_mad(init_states_mad, times, default_parms,
                              varied_parm_name = names(parms_mad[i]),
                              varied_parm_vals = parms_mad[[i]]) 
     
@@ -301,7 +301,7 @@ sensitivity_analysis <- function(parms_mad, parms_don, init_states_don, init_sta
   print("Starting Donnelly sensitivity analysis")
   for (i in 1:length(parms_don)) {
     
-    output <- vary_param_don(init_states_don, times, parms,
+    output <- vary_param_don(init_states_don, times, default_parms,
                              varied_parm_name = names(parms_don[i]),
                              varied_parm_vals = parms_don[[i]]) 
     
@@ -396,15 +396,18 @@ all_plots <- gridExtra::grid.arrange(don_plots,
 all_plots
 dev.off()
 
+
+###################################################
 ### INVESTIGATE RELATIONSHIP BETWEEN THETA AND PHI
-## theta = Donnelly model, aphid dispersal rate
+###################################################
+## theta = Donnelly model, aphid dispersal rate per day
 ## phi = Madden model, number plants visited per day by vector
 
+## rerun sensitivity analysis for just phi and theta
 upper_lim <- 50
 theta_vals <- list(theta = seq(0, upper_lim, length.out = num_parm_runs))
 
 phi_vals <- list(phi = seq(0, upper_lim, length.out = num_parm_runs))
-
 
 theta_phi_data <- sensitivity_analysis(parms_mad = phi_vals,
                                           parms_don = theta_vals,
@@ -420,98 +423,137 @@ plot_reverse_final_I
 
 plot_final_I <- ggplot(data = theta_phi_data, aes(x = parm_val, y = final_I)) +
   geom_line() +
-  facet_wrap(~parm_name)
+  facet_wrap(~parm_name) +
+  annotate("text", label = paste("w =", parms[["w"]]), x = 35, y = 1)
+
 plot_final_I
 
-# find point at which epidemic takes off (final_I > 0) for phi and theta
-find_epidemic_threshold <- function(phi_data, theta_data) {
+find_epidemic_threshold <- function(theta_phi_data, init_states_don, init_states_mad, times, parms) {
+  
+  # function to find point at which epidemic takes off (final_I > 0) for phi and theta
+  
+  phi_data <- theta_phi_data %>% filter(parm_name == "phi")
+  theta_data <- theta_phi_data %>% filter(parm_name == "theta")
   
   phi_index <- match(TRUE, phi_data$final_I > 0) # finds first instance of final_I > 0
   theta_index <- match(TRUE, theta_data$final_I > 0)
-  
-  # return rows of data around the threshold
+
+  if (is.na(phi_index)) {
+    if (is.na(theta_index)) {
+      stop("PHI AND THETA: No threshold found - final incidence always 0")
+    } else {
+      stop("PHI: No threshold found - final incidence always 0")
+    }
+  } 
+  else if (is.na(theta_index)) {
+    stop("THETA: No threshold found - final incidence always 0")
+  } 
+  else if (phi_index == 1 | theta_index == 1) {
+    stop("PHI/THETA: No threshold found - final incidence never 0")
+  }
+  # extract rows of data around the threshold
   phi_subset <- phi_data[(phi_index-1):phi_index,]
   theta_subset <- theta_data[(theta_index-1):theta_index,]
   
-  return(list(phi_subset, theta_subset))
+  # if the first instance where final disease incidence > 0 is smaller than 0.01, consider
+  # the estimate for the threshold accurate enough and return it
+  if (phi_subset[2, "final_I"] < 0.002 | theta_subset[2, "final_I"] < 0.002) {
+    
+    phi_thresh <- mean(c(phi_subset[1, "parm_val"], phi_subset[2, "parm_val"]))
+    theta_thresh <- mean(c(theta_subset[1, "parm_val"], theta_subset[2, "parm_val"]))
+    
+    return(c(phi_threshold = phi_thresh,
+             theta_threshold = theta_thresh))
+  }
+  
+  # else run find_epidemic_threshold() with new smaller parameter limits recursively until 
+  # above condition is reached
+  
+  phi_lower_lim <- phi_subset[1, "parm_val"]
+  phi_upper_lim <- phi_subset[2, "parm_val"]
+  
+  theta_lower_lim <- theta_subset[1, "parm_val"]
+  theta_upper_lim <- theta_subset[2, "parm_val"]
+  
+  num_parm_runs <- 100
+  theta_vals_condensed <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
+  
+  phi_vals_condensed <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
+  
+  # re-run sensitivity analysis
+  epidemic_threshold_res <- sensitivity_analysis(parms_mad = phi_vals_condensed,
+                                                 parms_don = theta_vals_condensed,
+                                                 init_states_don, 
+                                                 init_states_mad, 
+                                                 times, 
+                                                 parms)
+  # feed back into function recursively
+  find_epidemic_threshold(epidemic_threshold_res, 
+                          init_states_don, 
+                          init_states_mad, 
+                          times, 
+                          parms)
 }
 
-phi_data <- theta_phi_data %>% filter(parm_name == "phi")
-theta_data <- theta_phi_data %>% filter(parm_name == "theta")
+out <- find_epidemic_threshold(theta_phi_data,
+                               init_states_don, 
+                               init_states_mad, 
+                               times, 
+                               parms)
+out["phi_threshold"] # 2.88
+out["theta_threshold"] # 0.54
 
-out <- find_epidemic_threshold(phi_data, theta_data)
-phi_threshold <- out[[1]]
-theta_threshold <- out[[2]]
-
-# run analysis between these values of the parms to find exact point at which final_I > 0
-phi_lower_lim <- phi_threshold[1, "parm_val"]
-phi_upper_lim <- phi_threshold[2, "parm_val"]
-
-theta_lower_lim <- theta_threshold[1, "parm_val"]
-theta_upper_lim <- theta_threshold[2, "parm_val"]
-
-theta_vals_condensed <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
-
-phi_vals_condensed <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
-
-
-epidemic_threshold_res <- sensitivity_analysis(parms_mad = phi_vals_condensed,
-                                      parms_don = theta_vals_condensed,
-                                      init_states_don, 
-                                      init_states_mad, 
-                                      times, 
-                                      parms)
-
-phi_data <- epidemic_threshold_res %>% filter(parm_name == "phi")
-theta_data <- epidemic_threshold_res %>% filter(parm_name == "theta")
-
-out <- find_epidemic_threshold(phi_data, theta_data)
-phi_subset <- out[[1]]
-theta_subset <- out [[2]]
-
-phi_subset[2, "parm_val"] # phi = 2.887 when final_I is first >0
-theta_subset[2, "parm_val"] # theta = 0.541 when final_I is first >0
-
+############
 ### relationship between phi and theta depends on w (feeding rate)
-# w = 0.5 gives expected value of 1 visit per dispersal, making phi and theta equivalent
+# w = 0.5 gives expected value of 1 probe per dispersal, making phi and theta equivalent
 # see lab book for explanation
 
+# set w to 1
 parms_new <- parms
 parms_new["w"] <- 0.5
 
+# re-run sensitivity analysis for phi and theta when w = 1
 new_w_res <- sensitivity_analysis(parms_mad = phi_vals,
                                       parms_don = theta_vals,
                                       init_states_don, 
                                       init_states_mad, 
                                       times, 
                                       parms_new)
+
 w_plot_final_I <- ggplot(data = new_w_res, aes(x = parm_val, y = final_I)) +
   geom_line() +
-  facet_wrap(~parm_name)
+  facet_wrap(~parm_name) +
+  annotate("text", label = paste("w =", parms_new[["w"]]), x = 35, y = 1)
 w_plot_final_I
 
+# same plot zoomed in on epidemic threshold
+w_res_zoom <- sensitivity_analysis(parms_mad = list(phi = seq(0, 5, length.out = num_parm_runs)),
+                                   parms_don = list(theta = seq(0, 5, length.out = num_parm_runs)),
+                                   init_states_don, 
+                                   init_states_mad, 
+                                   times, 
+                                   parms_new)
+zoom_plot_final_I <- ggplot(data = w_res_zoom, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  facet_wrap(~parm_name)
+zoom_plot_final_I
+
+# compare graphs when w = 0.2 and 0.5 - theta looks much more like phi when w=0.5
 grid.arrange(plot_final_I, w_plot_final_I)
 
-### RUN DONNELLY EPIDEMIC
-trajectory_don <- data.frame(ode(y = init_states_don,
-                             times = times,
-                             parms = parms,
-                             func = donnelly_simple_ode))
+# compare parameter values at which epidemic takes off for phi and theta when w=0.5
+threshold <- find_epidemic_threshold(new_w_res,
+                                     init_states_don,
+                                     init_states_mad,
+                                     times,
+                                     parms_new)
+threshold["phi_threshold"] # 2.882359 
+threshold["theta_threshold"] # 2.157943
 
-# plot trajectory of infected plants and number of aphids
-don_plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
-  geom_line() +
-  labs(x = "Time (days)",
-       y = "Number of infected plants, I")
-
-# run with w = 0.5
-trajectory_don_w <- data.frame(ode(y = init_states_don,
-                                 times = times,
-                                 parms = parms_new,
-                                 func = donnelly_simple_ode))
-
-# plot trajectory of infected plants and number of aphids
-don_plant_trajec_w <- ggplot(data = trajectory_don_w, aes(x = time, y = I)) +
-  geom_line() +
-  labs(x = "Time (days)",
-       y = "Number of infected plants, I")
+## plot w (feeding rate) against 1-w/w (expected number of probes per dispersal)
+# see lab book for derivation
+w <- seq(0,1,by=0.02)
+plot(w, (1-w)/w, 
+     type = "l",
+     xlab = "w, feeding rate",
+     ylab = "(1-w)/w, expected number of plant probes per dispersal")
