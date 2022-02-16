@@ -527,8 +527,11 @@ w_plot_final_I <- ggplot(data = new_w_res, aes(x = parm_val, y = final_I)) +
 w_plot_final_I
 
 # same plot zoomed in on epidemic threshold
-w_res_zoom <- sensitivity_analysis(parms_mad = list(phi = seq(0, 5, length.out = num_parm_runs)),
-                                   parms_don = list(theta = seq(0, 5, length.out = num_parm_runs)),
+zoom_phi_vals <- list(phi = seq(0, 5, length.out = num_parm_runs))
+zoom_theta_vals <- list(theta = seq(0, 5, length.out = num_parm_runs))
+
+w_res_zoom <- sensitivity_analysis(parms_mad = zoom_phi_vals,
+                                   parms_don = zoom_theta_vals,
                                    init_states_don, 
                                    init_states_mad, 
                                    times, 
@@ -557,3 +560,112 @@ plot(w, (1-w)/w,
      type = "l",
      xlab = "w, feeding rate",
      ylab = "(1-w)/w, expected number of plant probes per dispersal")
+
+
+#####
+### try varying phi and tau simultaneously
+# making phi = tau may help equate the models (see lab book)
+
+vary_2_param_mad <- function(init_states_mad, times, parms, varied_parm_name1, varied_parm_name2, varied_parm_vals) {
+  
+  # function to run the Madden ODE multiple times with *two* parameters varying, as specified by user.
+  # both varying parameters are the same at any given point.
+  # returns data frame of final incidence, I, of all runs, along with values of varied parameter
+  
+  # initialise output data frame
+  parm_names <- paste(varied_parm_name1, varied_parm_name2, sep = ",")
+  
+  output <- data.frame(parm_names = rep(parm_names, length(varied_parm_vals)),
+                       parm_val = varied_parm_vals,
+                       final_I = rep(NA, length(varied_parm_vals)),
+                       model = rep("Madden", length(varied_parm_vals))
+  )
+  
+  for (run in 1:length(varied_parm_vals)) {
+    
+    parms[[varied_parm_name1]] <- varied_parm_vals[run]
+    parms[[varied_parm_name2]] <- varied_parm_vals[run]
+    
+    trajectory <- data.frame(ode(y = init_states_mad, 
+                                 times = times, 
+                                 parms = parms, 
+                                 func = madden_simple_ode))
+    output[run, "final_I"] <- round(trajectory[nrow(trajectory), "I"], 3)
+    
+  }
+  
+  return(output)
+}
+
+phi_tau_df <- vary_2_param_mad(init_states_mad, 
+                              times, 
+                              parms_new, 
+                              "phi", 
+                              "tau", 
+                              unlist(unname(phi_vals)))
+
+tau_phi_plot_final_I <- ggplot(data = phi_tau_df, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  annotate("text", label = unique(phi_tau_df$parm_names), x = 0, y = 350) +
+  ylim(0, 400)
+tau_phi_plot_final_I
+
+w_plot_final_I_theta_only <- ggplot(data = new_w_res %>% filter(parm_name == "theta"), 
+                                    aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  annotate("text", label = paste("w =", parms_new[["w"]]), x = 35, y = 1) +
+  annotate("text", label = "theta", x = 0, y = 350) +
+  ylim(0, 400)
+
+grid.arrange(tau_phi_plot_final_I, w_plot_final_I_theta_only)
+
+### zoom in to see epidemic threshold
+phi_tau_zoom_df <- vary_2_param_mad(init_states_mad, 
+                               times, 
+                               parms_new, 
+                               "phi", 
+                               "tau", 
+                               unlist(unname(zoom_phi_vals)))
+
+zoom_tau_phi_plot_final_I <- ggplot(data = phi_tau_zoom_df, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  annotate("text", label = unique(phi_tau_df$parm_names), x = 0, y = 350)
+
+zoom_plot_final_I_theta_only <- ggplot(data = w_res_zoom %>% filter(parm_name == "theta"),
+                                       aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  annotate("text", label = paste("w =", parms_new[["w"]]), x = 4.5, y = 1) +
+  annotate("text", label = "theta", x = 0, y = 200)
+
+grid.arrange(zoom_tau_phi_plot_final_I, zoom_plot_final_I_theta_only)
+
+#################
+## INVESTIGATING RELATIONSHIP BETWEEN TAU AND W
+#################
+
+parms_new["tau"] <- 2
+
+# re-run sensitivity analysis for phi and theta when tau = 0.9
+new_tau_res <- sensitivity_analysis(parms_mad = phi_vals,
+                                    parms_don = theta_vals,
+                                    init_states_don, 
+                                    init_states_mad, 
+                                    times, 
+                                    parms_new)
+tau_plot_final_I <- ggplot(data = new_tau_res, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  facet_wrap(~parm_name) +
+  annotate("text", label = paste("tau =", parms_new[["tau"]]), x = 35, y = 1)
+tau_plot_final_I
+
+grid.arrange(tau_plot_final_I, w_plot_final_I)
+
+# compare disease thresholds
+threshold <- find_epidemic_threshold(new_tau_res,
+                                     init_states_don,
+                                     init_states_mad,
+                                     times,
+                                     parms_new)
+threshold["phi_threshold"] 
+threshold["theta_threshold"] 
+
