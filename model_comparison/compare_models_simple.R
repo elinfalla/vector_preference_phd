@@ -666,6 +666,133 @@ threshold <- find_epidemic_threshold(new_tau_res,
 threshold["phi_threshold"] 
 threshold["theta_threshold"] 
 
+#########
+### RUN SENSITIVITY ANALYSIS OF PHI AND THETA FOR VARYING TAU AND W VALUES
+
+multiple_sensitivity_analysis <- function(parms_mad, parms_don, 
+                                          varied_parm_name_mad, varied_parm_val_mad, 
+                                          varied_parm_name_don, varied_parm_val_don, 
+                                          init_states_don, init_states_mad, times, parms) {
+  
+  ## function that runs a sensitivity analysis multiple times for varying values of one madden and one donnelly
+  ## parameter. returns dataframe of output and final graph displaying result in the form of a grob. use grid.arrange()
+  ## to display the plot.
+  
+  if (length(varied_parm_val_don) != length(varied_parm_val_mad)) {
+    stop("varied_parm_val_mad and varied_parm_val_don must be the same length")
+  }
+  
+  # initialise output dataframe
+  all_sens_analysis_df <- data.frame(
+                          analysis_parm_name = character(),
+                          analysis_parm_val = numeric(),
+                          final_I = numeric(),
+                          model = character(),
+                          varied_parm_name = character(),
+                          varied_parm_val = numeric()
+                          )
+  
+  # calculate how many rows of the output df are for each model
+  num_mad_rows <- sum(lengths(parms_mad))
+  num_don_rows <- sum(lengths(parms_don))
+  
+  # for loop to run sensitivity analysis for all values of varied_parms
+  for (run in 1:length(varied_parm_val_don)) {
+  
+    # specify varying parameter values for this run
+    parms[varied_parm_name_mad] <- varied_parm_val_mad[run]
+    parms[varied_parm_name_don] <- varied_parm_val_don[run]
+    
+    # run sensitivity analysis with these parameter values
+    sens_analysis <- sensitivity_analysis(parms_mad,
+                           parms_don,
+                           init_states_don, 
+                           init_states_mad, 
+                           times, 
+                           parms)
+    
+    # create df for information about the varying parameters in this run
+    varying_parm_data <- data.frame(c(rep(varied_parm_name_mad, num_mad_rows), 
+                                      rep(varied_parm_name_don, num_don_rows)), # varied_parm_name column
+                                    c(rep(varied_parm_val_mad[run], num_mad_rows),
+                                      rep(varied_parm_val_don[run], num_don_rows)) # varied_parm_val column
+                                    )
+    
+    # add varying parameters data to output of sensitivity analysis
+    full_sens_analysis_df <- cbind(sens_analysis, varying_parm_data)
+    names(full_sens_analysis_df) <- c("analysis_parm_name", "analysis_parm_val", "final_I", "model", "varied_parm_name", "varied_parm_val")
+    
+    # add rows of this sensitivity analysis to overall dataframe
+    all_sens_analysis_df <- rbind(all_sens_analysis_df, full_sens_analysis_df)
+  }
+  
+  # split data by model
+  split_data <- split(all_sens_analysis_df, f = all_sens_analysis_df$model)
+  
+  # plot madden model data
+  madden_plot <- ggplot(data = split_data$Madden,
+                         aes(x = analysis_parm_val, y = final_I, col = as.factor(round(varied_parm_val,2)))) +
+    facet_wrap(~model) +
+    geom_line() +
+    labs(color = unique(split_data$Madden$varied_parm_name),
+         x = unique(split_data$Madden$analysis_parm_name), 
+         y = "Final disease incidence")
+  
+  # plot donnelly
+  donnelly_plot <- madden_plot %+% split_data$Donnelly + # %+% means same plot but using Donnelly data
+    labs(color = unique(split_data$Donnelly$varied_parm_name),
+         x = unique(split_data$Donnelly$analysis_parm_name))
+  
+  final_plot <- arrangeGrob(madden_plot, donnelly_plot)
+  
+  # return final dataframe and grob of final plot (use grid.arrange to plot it)
+  return(list(all_sens_analysis_df, final_plot))
+}
+
+w_vals <- seq(0.1, 0.99999, length.out = 10)
+tau_vals_1 <- 1/w_vals
+
+# plot_muliple_sens_analysis <- function(parms_mad parms_don)
+mult_sens_analysis_phi_theta <- multiple_sensitivity_analysis(parms_mad = phi_vals, 
+                              parms_don = theta_vals, 
+                              varied_parm_name_mad = "tau", 
+                              varied_parm_val_mad = tau_vals_1, 
+                              varied_parm_name_don = "w",
+                              varied_parm_val_don = w_vals, 
+                              init_states_don, init_states_mad, times, parms)
+
+# plot result
+grid.arrange(mult_sens_analysis_out[[2]])
+
+tau_vals_2 <- seq(0.1, 400, by = 40)
+
+mult_sens_analysis_phi_theta_2 <- multiple_sensitivity_analysis(parms_mad = phi_vals, 
+                                                        parms_don = theta_vals, 
+                                                        varied_parm_name_mad = "tau", 
+                                                        varied_parm_val_mad = tau_vals_2, 
+                                                        varied_parm_name_don = "w",
+                                                        varied_parm_val_don = w_vals, 
+                                                        init_states_don, init_states_mad, times, parms)
+grid.arrange(mult_sens_analysis_phi_theta_2[[2]])
+
+#########
+### RUN SENSITIVITY ANALYSIS OF W AND TAU FOR VARYING PHI AND THETA VALUES
+
+w_vals_list <- list(w = seq(0.001, 0.999, length.out = 100))
+tau_vals_list <- list(tau = seq(0, 50, length.out = 100))
+
+phi_vals_vec <- seq(0, 40, length.out = 15)
+theta_vals_vec <- seq(0, 40, length.out = 15)
+
+mult_sens_analysis_w_tau <- multiple_sensitivity_analysis(parms_mad = tau_vals_list,
+                                                              parms_don = w_vals_list,
+                                                              varied_parm_name_mad = "phi",
+                                                              varied_parm_val_mad = phi_vals_vec,
+                                                              varied_parm_name_don = "theta",
+                                                              varied_parm_val_don = theta_vals_vec,
+                                                              init_states_don, init_states_mad, times, parms)
+grid.arrange(mult_sens_analysis_w_tau[[2]])
+
 
 #################
 ## INVESTIGATING RELATIONSHIP BETWEEN TAU AND W
