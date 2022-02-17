@@ -639,13 +639,10 @@ zoom_plot_final_I_theta_only <- ggplot(data = w_res_zoom %>% filter(parm_name ==
 
 grid.arrange(zoom_tau_phi_plot_final_I, zoom_plot_final_I_theta_only)
 
-#################
-## INVESTIGATING RELATIONSHIP BETWEEN TAU AND W
-#################
-
+## look at similarity between phi and theta vs final_I when tau = 2, not 4
 parms_new["tau"] <- 2
 
-# re-run sensitivity analysis for phi and theta when tau = 0.9
+# re-run sensitivity analysis for phi and theta when tau = 2
 new_tau_res <- sensitivity_analysis(parms_mad = phi_vals,
                                     parms_don = theta_vals,
                                     init_states_don, 
@@ -669,3 +666,25 @@ threshold <- find_epidemic_threshold(new_tau_res,
 threshold["phi_threshold"] 
 threshold["theta_threshold"] 
 
+
+#################
+## INVESTIGATING RELATIONSHIP BETWEEN TAU AND W
+#################
+
+## rerun sensitivity analysis for just phi and theta
+w_vals <- list(w = seq(0.0001, 1, length.out = num_parm_runs))
+
+tau_vals <- list(tau = seq(0, 20, length.out = num_parm_runs))
+
+w_tau_data <- sensitivity_analysis(parms_mad = tau_vals,
+                                       parms_don = w_vals,
+                                       init_states_don, 
+                                       init_states_mad, 
+                                       times, 
+                                       parms)
+
+plot_final_I <- ggplot(data = w_tau_data, aes(x = parm_val, y = final_I)) +
+  geom_line() +
+  facet_wrap(~parm_name, scales = "free")
+
+plot_final_I
