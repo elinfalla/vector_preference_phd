@@ -11,6 +11,7 @@ rm(list = ls())
 # packages
 library(deSolve)
 library(ggplot2)
+library(gridExtra)
 
 
 donnelly_vpref_ode_I <- function(times, states, parms) {
@@ -41,9 +42,9 @@ donnelly_vpref_ode_I <- function(times, states, parms) {
   
   # infected plants - change in incidence of infected plants
   # = rate of aphid dispersal * mean number of transmissions - plant death
-  di <- (theta*A)*xI - gamma*I
+  dI <- (theta*A)*xI - gamma*I
   
-  return(list(di))
+  return(list(dI))
 }
 
 donnelly_vpref_ode_i <- function(times, states, parms) {
@@ -110,10 +111,14 @@ init_states_I <- c(
 times <- seq(0, 8, by = 0.2)
 
 ########
-# run epidemic with default parameters (as donnelly et al. 2019)
+# run epidemic
 ########
 
 run_epidemic <- function(init_states_i, init_states_I, times, parms) {
+  
+  ### runs ode for both versions of the Donnelly model and plots graph of 
+  ### number of infected over time for each, on the same plot
+  
   trajectory_I <- data.frame(ode(y = init_states_I, 
                                  times = times, 
                                  parms = parms, 
@@ -141,12 +146,18 @@ run_epidemic <- function(init_states_i, init_states_I, times, parms) {
   return(plot)
 }
 
+## run epidemic for different values of H (number of plants) to verify the models give the same
+# result
+
 H_vals <- c(200, 400, 600, 800, 1000, 1200)
 out <- list()
+
 for (i in 1:length(H_vals)) {
   parms[["H"]] <- H_vals[i]
-  
+  init_states_i <- c(i = num_I/parms[["H"]])
   out[[i]] <- run_epidemic(init_states_i, init_states_I, times, parms)
 }
+
+# plot result
 grid.arrange(out[[1]], out[[2]], out[[3]], out[[4]], out[[5]], out[[6]])
 
