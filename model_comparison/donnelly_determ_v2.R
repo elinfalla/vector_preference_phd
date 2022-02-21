@@ -4,7 +4,9 @@
 #######################################################################
 
 ### This version (v2) works out the equilibrium values of As and Ai to feed into
-### the equation for di/dt, removing the need for As/dt and Ai/dt equations.
+### the equation for di/dt, removing the need for As/dt and Ai/dt equations. Note
+### contains functions for use of function optim() to find equilibriums, but these
+### are not utilised as a more efficient way using polyroot() was discovered after.
 
 rm(list=ls())
 
