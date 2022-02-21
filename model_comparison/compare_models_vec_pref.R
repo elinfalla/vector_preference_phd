@@ -30,7 +30,7 @@ madden_vpref_ode <- function(times, y, par) {
   # PLANT EQUATIONS
   S <- par[["H"]] - y[["I"]] # number of susceptible plants
   
-  become_infected <- par[["phi"]] * par[["b"]] * y[["Z"]] * S/(S + par[["v"]]*par[["e"]]*y[["I"]])
+  become_infected <- par[["phi"]] * par[["b"]] * y[["Z"]] * S/(S + par[["v"]]*y[["I"]])
   
   natural_death_I <- par[["c"]] * y[["I"]]
   virus_induced_death <- par[["d"]] * y[["I"]]
@@ -42,7 +42,7 @@ madden_vpref_ode <- function(times, y, par) {
   X <- par[["A"]] - y[["Z"]]
   
   acquisition <- par[["phi"]] * par[["a"]] * (1 - par[["e"]]*par[["w"]]) * X * par[["v"]]*y[["I"]] /
-    (S + par[["v"]]*par[["e"]]*y[["I"]])
+    (S + par[["v"]]*y[["I"]])
   stop_being_infective <- par[["tau"]] * y[["Z"]]
   
   # state equations
@@ -106,8 +106,8 @@ parms <- c(
   ## PARMS FOR BOTH
   A = 1200, # total (constant) number of vectors
   H = 400, # number host plants 
-  v = 1.2, # infected plant attractiveness
-  e = 0.8, # infected plant acceptability 
+  v = 1, # infected plant attractiveness
+  e = 1, # infected plant acceptability 
   w = 0.2 # feeding rate on healthy plant
 )
 
@@ -266,19 +266,23 @@ sensitivity_analysis <- function(parms_mad, parms_don, init_states_don, init_sta
   return(sen_analysis_df) 
 }
 
+num_parm_runs <- 50
+analysis_parms_don <- list(theta = seq(0, 20, length.out = num_parm_runs),
+                           w = seq(0.01, 1, length.out = num_parm_runs),
+                           Pacq = seq(0, 1, length.out = num_parm_runs),
+                           Pinoc = seq(0, 1, length.out = num_parm_runs),
+                           gamma = seq(0, 20, length.out = num_parm_runs),
+                           v = seq(0, 20, length.out = num_parm_runs),
+                           e = seq(0, 20, length.out = num_parm_runs))
 
-analysis_parms_don <- list(theta = seq(0, 20, length.out = 30),
-                           w = seq(0.01, 1, length.out = 30),
-                           Pacq = seq(0, 1, length.out = 30),
-                           Pinoc = seq(0, 1, length.out = 30),
-                           gamma = seq(0, 20, length.out = 30))
-
-analysis_parms_mad <- list(phi = seq(0, 20, length.out = 30),
-                           tau = seq(0, 20, length.out = 30),
-                           a = seq(0, 1, length.out = 30),
-                           b = seq(0, 1, length.out = 30),
-                           c = seq(0, 20, length.out = 30),
-                           d = seq(0, 20, length.out = 30))
+analysis_parms_mad <- list(phi = seq(0, 20, length.out = num_parm_runs),
+                           tau = seq(0, 20, length.out = num_parm_runs),
+                           a = seq(0, 1, length.out = num_parm_runs),
+                           b = seq(0, 1, length.out = num_parm_runs),
+                           c = seq(0, 20, length.out = num_parm_runs),
+                           d = seq(0, 20, length.out = num_parm_runs),
+                           v = seq(0, 20, length.out = num_parm_runs),
+                           e = seq(0, 20, length.out = num_parm_runs))
 
 
 sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
@@ -287,3 +291,68 @@ sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
                                           init_states_mad, 
                                           times, 
                                           parms)
+
+###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
+don_res_only <- sens_analysis_res %>%
+  filter(model == "Donnelly")
+mad_res_only <- sens_analysis_res %>%
+  filter(model == "Madden")
+
+don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
+                                                                             aes(x = parm_val, 
+                                                                                 y = final_I)) +
+                            geom_line() +
+                            labs(x = p))
+
+mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
+                                                                             aes(x = parm_val, 
+                                                                                 y = final_I)) +
+                            geom_line() +
+                            labs(x = p))
+
+# create table to be given alongside graphs giving default parameter values
+parms_table <- round(data.frame(parms[names(parms) != "k1" &
+                                        names(parms) != "lamda" &
+                                        names(parms) != "T"]), 2)
+parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
+
+# ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
+don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]], 
+                                    don_model_plots[[2]], 
+                                    don_model_plots[[3]],
+                                    don_model_plots[[4]],
+                                    don_model_plots[[5]],
+                                    grid.rect(gp=gpar(col="white")), # empty space
+                                    don_model_plots[[6]],
+                                    don_model_plots[[7]],
+                                    ncol = 1)
+
+mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]], 
+                                    mad_model_plots[[2]], 
+                                    mad_model_plots[[3]],
+                                    mad_model_plots[[4]],
+                                    mad_model_plots[[5]], 
+                                    mad_model_plots[[6]],
+                                    mad_model_plots[[7]],
+                                    mad_model_plots[[8]],
+                                    ncol = 1)
+
+layout <- rbind(c(1,2,3),
+                c(1,2,4),
+                c(1,2,4),
+                c(1,2,4))
+title <- textbox_grob("Model comparison with vector preference - constant vector population", 
+                      gp = gpar(fontface = "bold",
+                                fontsize = 13),
+                      padding = unit(c(0, 1, 0, 1), "cm"))
+
+# create pdf file to print plot to
+pdf(file = "sens_analysis_vec_pref_models.pdf")
+all_plots <- gridExtra::grid.arrange(don_plots,
+                                     mad_plots,
+                                     title,
+                                     parms_grob,
+                                     layout_matrix = layout,
+                                     widths = c(2,2,1))
+all_plots
+dev.off()
