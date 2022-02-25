@@ -100,8 +100,8 @@ parms <- c(
   ## MADDEN PARMS
   k1 = 1/0.021, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
   lamda = 1/0.021, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
-  T = 0.5, # # time feeding/probing per plant visit (set to 0.5/phi in Madden model)
-  tau = 1/0.25, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
+  T = 0.2, # # time feeding/probing per plant visit (set to 0.5/phi in Madden model)
+  tau = 1/0.25, # rate of moving through infectious state in vector
   
   ## PARMS FOR BOTH
   A = 1200, # total (constant) number of vectors
@@ -120,9 +120,9 @@ a <- parms[["Pacq"]] #1 - exp(-parms[["lamda"]] * parms[["T"]])
 b <- parms[["Pinoc"]] #1 - exp(-parms[["k1"]] * parms[["T"]])
 
 # plants visited per day by an insect
-phi <- sqrt(parms[["theta"]] * parms[["tau"]] * (1 - parms[["w"]]) / 
-              (parms[["w"]] #* parms[["a"]] * parms[["b"]]
-              )) 
+phi <- parms[["theta"]] #sqrt(parms[["theta"]] * parms[["tau"]] * (1 - parms[["w"]]) / 
+#               (parms[["w"]] #* parms[["a"]] * parms[["b"]]
+#               )) 
 
 # natural plant death rate (equivalent to beta in original Madden model)
 c <- parms[["gamma"]] / 2
@@ -149,6 +149,7 @@ init_states_mad <- c(
   Z = 0 # number infective insects
 )
 
+
 ### RUN DONNELLY EPIDEMIC
 trajectory_don <- data.frame(ode(y = init_states_don,
                              times = times,
@@ -173,7 +174,8 @@ names(trajectory_mad_long) <- c("time", "compartment", "number")
 # plot trajectory of infected plants and vector compartments
 plant_trajec <- plant_trajec +
   geom_line(data = trajectory_mad_long %>% filter(compartment == "I"),
-            aes(x = time, y = number), color = "red")
+            aes(x = time, y = number), color = "red") +
+  annotate("text", label = "red = Madden\nblack = Donnelly", x = times[length(times)/3*2], y = 0)
 plant_trajec
 
 
@@ -356,3 +358,141 @@ all_plots <- gridExtra::grid.arrange(don_plots,
                                      widths = c(2,2,1))
 all_plots
 dev.off()
+
+##### CREATE HEATMAPS OF V VS E for final incidence of disease
+
+find_I_equilibrium <- function(parms, model) {
+  
+  ## function that for given parameter values, finds the non-zero equilibrium value of I,
+  ## number of infected plants, for either the Donnelly model or the Madden model
+  
+  if (model == "Donnelly") {
+    gamma <- parms[["gamma"]]
+    theta <- parms[["theta"]]
+    H <- parms[["H"]]
+    v <- parms[["v"]]
+    e <- parms[["e"]]
+    w <- parms[["w"]]
+    Pacq <- parms[["Pacq"]]
+    Pinoc <- parms[["Pinoc"]]
+    A <- parms[["A"]]
+    
+    # coefficients worked out by hand (see lab book)
+    coeff_0 <- theta*A*v*(1 - e*w)*H*Pacq*Pinoc - gamma*w*H^2
+    coeff_1 <- gamma*w*v*(1 - e)*H + 2*gamma*w*H - 2*gamma*w*v*H - theta*A*v*(1 - e*w)*Pacq*Pinoc
+    coeff_2 <- gamma*w*(v^2*(1 - e) - v*(1 - e) - v^2 + 2*v - 1)
+  }
+  else if (model == "Madden") {
+    c <- parms[["c"]]
+    d <- parms[["d"]]
+    phi <- parms[["phi"]]
+    H <- parms[["H"]]
+    v <- parms[["v"]]
+    e <- parms[["e"]]
+    w <- parms[["w"]]
+    a <- parms[["a"]]
+    b <- parms[["b"]]
+    A <- parms[["A"]]
+    tau <- parms[["tau"]]
+    
+    coeff_0 <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w)*A*v
+    coeff_1 <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w)*v*H) + phi^2*b*a*(1 - e*w)*A*v
+    coeff_2 <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w)*v + phi*a*(1 - e*w)*v^2)
+  }
+  else {
+    stop("model must be either 'Donnelly' or 'Madden'")
+  }
+  
+  # solve for I using coefficients to get all equilibrimus
+  equilibriums <- polyroot(c(coeff_0, coeff_1, coeff_2))
+  
+  # subset to those that have no imaginary part, then remove imaginary part (as it is 0)
+  equilibriums <- equilibriums[Im(zapsmall(equilibriums)) == 0]
+  equilibriums <- Re(equilibriums)
+  
+  # subset to biologically possible equilibrium i.e. I > 0, I <= H (number host plants)
+  equilibriums <- equilibriums[equilibriums > 0 & equilibriums <= parms[["H"]]]
+  
+  if (length(equilibriums) == 0) { # there is no stable positive equilibrium for I
+    return(0)
+  } 
+  else if (length(equilibriums) > 1) {
+      #stop("Multiple positive equilibriums for I")
+    return(NA)
+  }
+  
+  # turn equilibrium into proportion of infected plants, i
+  equilibriums <- equilibriums / parms[["H"]]
+  
+  return(equilibriums)
+
+}
+
+equilibrium_apply_func <- function(e_v_vals, parms, col_names, model) {
+  
+  ## function to be passed to an apply function - for given e and v vals, it changes
+  ## e and v to those values and calculates the equilibrium value of I, number of 
+  ## plants infected, for the Donnelly model
+  
+  parms[[ col_names[1] ]] <- e_v_vals[1]
+  parms[[ col_names[2] ]] <- e_v_vals[2]
+  
+  equilibrium <- find_I_equilibrium(parms, model)
+  
+  return(equilibrium)
+}
+
+# define e and v vals across which the equilibrim of I will be found
+v_vals <- seq(0.001, 5, length.out = 100)
+e_vals <- seq(0.001, 1/parms[["w"]], length.out = 100) # in madden e*w must be < 1
+
+
+# create df with all combinations of v and e
+v_e_df <- expand.grid(v = v_vals, e = e_vals) 
+
+# create new I_eq column for each model by calculating the I equilibrium for each row of v_e_df (i.e. each combination
+# of v and e values) for first the Donnelly model, then the Madden model
+I_eq_values <- lapply(c("Donnelly", "Madden"), 
+                      function(model) apply(v_e_df, 1, equilibrium_apply_func, 
+                                            parms = parms, 
+                                            col_names = names(v_e_df), 
+                                            model = model))
+v_e_df$I_eq_don <- I_eq_values[[1]]
+v_e_df$I_eq_mad <- I_eq_values[[2]]
+
+
+# turn any bistable equilibriums into a high number so they're a different colour on the heatmap
+# v_e_df$I_eq <- apply(v_e_df, 1, function(row) if(length(row$I_eq) > 1) {row$I_eq = 1.2}
+#                                               else {row$I_eq = row$I_eq})
+
+heatmap_don <- ggplot(data = v_e_df, aes(x = v, y = e, fill = I_eq_don)) +
+  geom_tile() +
+  scale_fill_gradient(low = "red", high = "yellow", name = "Equilibrium\ni value", na.value = "white") +
+  labs(title = "Donnelly")
+
+
+heatmap_mad <- ggplot(data = v_e_df, aes(x = v, y = e, fill = I_eq_mad)) +
+  geom_tile() +
+  scale_fill_gradient(low = "red", high = "yellow", name = "Equilibrium\ni value", na.value = "white") +
+  labs(title = "Madden")
+
+grid.arrange(heatmap_don, heatmap_mad)
+
+c <- parms[["c"]]
+d <- parms[["d"]]
+phi <- parms[["phi"]]
+H <- parms[["H"]]
+v <- parms[["v"]]
+e <- parms[["e"]]
+w <- parms[["w"]]
+a <- parms[["a"]]
+b <- parms[["b"]]
+A <- parms[["A"]]
+tau <- parms[["tau"]]
+
+coeff_0 <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w)*A*v
+coeff_1 <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w)*v*H) + phi^2*b*a*(1 - e*w)*A*v
+coeff_2 <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w)*v + phi*a*(1 - e*w)*v^2)
+
+polyroot(c(coeff_0, coeff_1, coeff_2))
+
