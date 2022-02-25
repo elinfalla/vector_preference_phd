@@ -21,7 +21,7 @@ library(ggplot2)
 library(reshape2)
 library(dplyr)
 library(gridExtra)
-library(grid)
+library(grid) 
 library(gridtext)
 
 #### DEFINE MADDEN ODE
@@ -329,72 +329,72 @@ analysis_parms_mad <- list(phi = seq(0, 20, length.out = num_parm_runs),
                            d = seq(0, 20, length.out = num_parm_runs))
 
 
-sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
-                                          parms_don = analysis_parms_don,
-                                          init_states_don, 
-                                          init_states_mad, 
-                                          times, 
-                                          parms)
-
-###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
-don_res_only <- sens_analysis_res %>%
-  filter(model == "Donnelly")
-mad_res_only <- sens_analysis_res %>%
-  filter(model == "Madden")
-
-don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
-                                                                                 aes(x = parm_val, 
-                                                                                     y = final_I)) +
-                            geom_line() +
-                            labs(x = p))
-
-mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
-                                                                             aes(x = parm_val, 
-                                                                                 y = final_I)) +
-                            geom_line() +
-                            labs(x = p))
-  
-# create table to be given alongside graphs giving default parameter values
-parms_table <- round(data.frame(parms[names(parms) != "k1" &
-                                     names(parms) != "lamda" &
-                                     names(parms) != "T"]), 2)
-parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
-
-# ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
-don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]], 
-                        don_model_plots[[2]], 
-                        don_model_plots[[3]],
-                        don_model_plots[[4]],
-                        don_model_plots[[5]], 
-                        grid.rect(gp=gpar(col="white")), # empty space
-                        nrow = 3, ncol = 2)
-
-mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]], 
-                        mad_model_plots[[2]], 
-                        mad_model_plots[[3]],
-                        mad_model_plots[[4]],
-                        mad_model_plots[[5]], 
-                        mad_model_plots[[6]],
-                        nrow = 3, ncol = 2)
-
-layout <- rbind(c(1,1,3),
-                c(1,1,4),
-                c(2,2,4),
-                c(2,2,4))
-title <- textbox_grob("Simple models comparison - no vector dynamics or preference", 
-                      gp = gpar(fontface = "bold",
-                                fontsize = 13),
-                      padding = unit(c(0, 1, 0, 1), "cm"))
-
-# create pdf file to print plot to
-pdf(file = "sens_analysis_simple_models.pdf")
-all_plots <- gridExtra::grid.arrange(don_plots, 
-                                     mad_plots,
-                                     title,
-                                     parms_grob,
-                                     layout_matrix = layout)
-all_plots
-dev.off()
+# sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
+#                                           parms_don = analysis_parms_don,
+#                                           init_states_don, 
+#                                           init_states_mad, 
+#                                           times, 
+#                                           parms)
+# 
+# ###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
+# don_res_only <- sens_analysis_res %>%
+#   filter(model == "Donnelly")
+# mad_res_only <- sens_analysis_res %>%
+#   filter(model == "Madden")
+# 
+# don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
+#                                                                                  aes(x = parm_val, 
+#                                                                                      y = final_I)) +
+#                             geom_line() +
+#                             labs(x = p))
+# 
+# mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
+#                                                                              aes(x = parm_val, 
+#                                                                                  y = final_I)) +
+#                             geom_line() +
+#                             labs(x = p))
+#   
+# # create table to be given alongside graphs giving default parameter values
+# parms_table <- round(data.frame(parms[names(parms) != "k1" &
+#                                      names(parms) != "lamda" &
+#                                      names(parms) != "T"]), 2)
+# parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
+# 
+# # ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
+# don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]], 
+#                         don_model_plots[[2]], 
+#                         don_model_plots[[3]],
+#                         don_model_plots[[4]],
+#                         don_model_plots[[5]], 
+#                         grid.rect(gp=gpar(col="white")), # empty space
+#                         nrow = 3, ncol = 2)
+# 
+# mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]], 
+#                         mad_model_plots[[2]], 
+#                         mad_model_plots[[3]],
+#                         mad_model_plots[[4]],
+#                         mad_model_plots[[5]], 
+#                         mad_model_plots[[6]],
+#                         nrow = 3, ncol = 2)
+# 
+# layout <- rbind(c(1,1,3),
+#                 c(1,1,4),
+#                 c(2,2,4),
+#                 c(2,2,4))
+# title <- textbox_grob("Simple models comparison - no vector dynamics or preference", 
+#                       gp = gpar(fontface = "bold",
+#                                 fontsize = 13),
+#                       padding = unit(c(0, 1, 0, 1), "cm"))
+# 
+# # create pdf file to print plot to
+# pdf(file = "sens_analysis_simple_models.pdf")
+# all_plots <- gridExtra::grid.arrange(don_plots, 
+#                                      mad_plots,
+#                                      title,
+#                                      parms_grob,
+#                                      layout_matrix = layout)
+# all_plots
+# dev.off()
 
 
 ###################################################
@@ -527,8 +527,8 @@ w_plot_final_I <- ggplot(data = new_w_res, aes(x = parm_val, y = final_I)) +
 w_plot_final_I
 
 # same plot zoomed in on epidemic threshold
-zoom_phi_vals <- list(phi = seq(0, 5, length.out = num_parm_runs))
-zoom_theta_vals <- list(theta = seq(0, 5, length.out = num_parm_runs))
+zoom_phi_vals <- list(phi = seq(2.5, 3, length.out = num_parm_runs))
+zoom_theta_vals <- list(theta = seq(2, 2.5, length.out = num_parm_runs))
 
 w_res_zoom <- sensitivity_analysis(parms_mad = zoom_phi_vals,
                                    parms_don = zoom_theta_vals,
@@ -538,7 +538,7 @@ w_res_zoom <- sensitivity_analysis(parms_mad = zoom_phi_vals,
                                    parms_new)
 zoom_plot_final_I <- ggplot(data = w_res_zoom, aes(x = parm_val, y = final_I)) +
   geom_line() +
-  facet_wrap(~parm_name)
+  facet_wrap(~parm_name, scales = "free")
 zoom_plot_final_I
 
 # compare graphs when w = 0.2 and 0.5 - theta looks much more like phi when w=0.5
@@ -666,6 +666,172 @@ threshold <- find_epidemic_threshold(new_tau_res,
 threshold["phi_threshold"] 
 threshold["theta_threshold"] 
 
+## test idea that epidemic trajectories are similar when phi = theta, w=0.5, tau=2
+vary_trajec <- function(varied_parm_vals, H_vals, 
+                        init_states_don, init_states_mad, times, parms) {
+  
+  ### function that runs the Madden and Donnelly ODEs for combinations of parameter values specified by
+  ### user for different values of H and plots I over time. Returns list of all plots.
+  
+
+  # create df of all combinations of H with the other parameters
+  all_combos <- expand.grid(parm_1 = varied_parm_vals[,1], H = H_vals)
+  all_combos <- cbind(all_combos, varied_parm_vals[,-1])
+  names(all_combos)[1] <- names(varied_parm_vals)[1]
+  
+  # initialise plot list
+  plots <- list()
+  
+  for (i in 1:nrow(all_combos)) {
+    
+    for (col in 1:ncol(all_combos)) {
+      parm_name <- names(all_combos)[col]
+      
+      parms[[parm_name]] <- all_combos[i, parm_name]
+    }
+    
+    # run donnelly epidemic
+    trajectory_don <- data.frame(ode(y = init_states_don,
+                                     times = times,
+                                     parms = parms,
+                                     func = donnelly_simple_ode))
+    
+    ### run madden epidemic
+    trajectory_mad <- data.frame(ode(y = init_states_mad,
+                                     times = times,
+                                     func = madden_simple_ode,
+                                     parms = parms))
+    
+    # turn madden output into long format
+    trajectory_mad_long <- reshape2::melt(trajectory_mad, id.vars = "time")
+    names(trajectory_mad_long) <- c("time", "compartment", "number")
+    
+    # plot donnelly trajectory 
+    plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
+      geom_line()  +
+      ylim(0, parms[["H"]])
+    
+    # plot madden trajectory on same plot
+    plant_trajec <- plant_trajec +
+      geom_line(data = trajectory_mad_long %>% filter(compartment == "I"),
+                aes(x = time, y = number), color = "red") +
+      annotate("text", label = paste("red = Madden\n", all_combos[i,1], all_combos[i,2]), 
+               x = times[length(times)/3*2], y = parms[["H"]]*2/3, size = 3)
+    
+    # store plot in list
+    plots[[i]] <- plant_trajec
+    
+  }
+  
+  return(plots)
+}
+
+### TEST 1: tau = phi = theta, w = 0.5
+parms_test1 <- parms
+parms_test1[["w"]] <- 0.5
+
+varied_parm_vals <- data.frame(theta = 1:5, 
+                         phi = 1:5, 
+                         tau = 1:5)
+H_vals <- c(200, 400, 600, 800)
+
+tau_equal_phi_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+                     H_vals = H_vals, 
+                     parms = parms_test1,
+                     init_states_don = init_states_don, 
+                     init_states_mad = init_states_mad, 
+                     times = times)
+
+# create pdf of results
+pdf("tau_equal_phi_test.pdf", height = 12, width = 12#, paper = "a4"
+)
+do.call("grid.arrange", c(tau_equal_phi_plots, ncol = nrow(varied_parm_vals)))
+
+dev.off()
+
+### TEST 2: tau = 0, phi=theta, w = 0.5
+parms_test2 <- parms
+parms_test2[["w"]] <- 0.5
+parms_test2[["tau"]] <- 0.01
+
+varied_parm_vals <- data.frame(theta = 1:5, 
+                               phi = 1:5)
+
+tau_equal_zero_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+                                   H_vals = H_vals, 
+                                   parms = parms_test2,
+                                   init_states_don = init_states_don, 
+                                   init_states_mad = init_states_mad, 
+                                   times = times)
+
+# create pdf of results
+pdf("tau_equal_zero_test.pdf", height = 12, width = 12)
+do.call("grid.arrange", c(tau_equal_zero_plots, ncol = nrow(varied_parm_vals)))
+dev.off()
+
+### TEST 3: tau = 2, phi=theta, w = 0.5
+parms_test3 <- parms
+parms_test3[["w"]] <- 0.5
+parms_test3[["tau"]] <- 2
+
+varied_parm_vals <- data.frame(theta = 1:5, 
+                               phi = 1:5)
+
+tau_equal_one_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+                                    H_vals = H_vals, 
+                                    parms = parms_test3,
+                                    init_states_don = init_states_don, 
+                                    init_states_mad = init_states_mad, 
+                                    times = times)
+
+# create pdf of results
+pdf("tau_equal_one_test.pdf", height = 12, width = 12)
+do.call("grid.arrange", c(tau_equal_one_plots, ncol = nrow(varied_parm_vals)))
+dev.off()
+
+### TEST 4: tau = H/20, phi=theta, w = 0.5
+parms_test4 <- parms
+parms_test4[["w"]] <- 0.5
+
+varied_parm_vals <- data.frame(theta = 1:5, 
+                               phi = 1:5,
+                               tau = H_vals/20)
+
+tau_prop_to_H_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+                                   H_vals = H_vals, 
+                                   parms = parms_test4,
+                                   init_states_don = init_states_don, 
+                                   init_states_mad = init_states_mad, 
+                                   times = times)
+
+# create pdf of results
+pdf("tau_prop_to_H_test.pdf", height = 12, width = 12)
+do.call("grid.arrange", c(tau_prop_to_H_plots, ncol = nrow(varied_parm_vals)))
+dev.off()
+
+# TEST 5: same as test 1 (tau=phi=theta) but A is bigger
+parms_test5 <- parms
+parms_test5[["w"]] <- 0.5
+parms_test5[["A"]] <- 1600
+
+varied_parm_vals <- data.frame(theta = 1:5, 
+                               phi = 1:5, 
+                               tau = 1:5)
+H_vals <- c(200, 400, 600, 800)
+
+tau_prop_to_phi_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+                                   H_vals = H_vals, 
+                                   parms = parms_test5,
+                                   init_states_don = init_states_don, 
+                                   init_states_mad = init_states_mad, 
+                                   times = times)
+
+# create pdf of results
+pdf("tau_prop_to_phi_test.pdf", height = 12, width = 12)
+do.call("grid.arrange", c(tau_prop_to_phi_plots, ncol = nrow(varied_parm_vals)))
+dev.off()
+
+
 #########
 ### RUN SENSITIVITY ANALYSIS OF PHI AND THETA FOR VARYING TAU AND W VALUES
 
@@ -752,7 +918,6 @@ multiple_sensitivity_analysis <- function(parms_mad, parms_don,
 w_vals <- seq(0.1, 0.99999, length.out = 10)
 tau_vals_1 <- 1/w_vals
 
-# plot_muliple_sens_analysis <- function(parms_mad parms_don)
 mult_sens_analysis_phi_theta <- multiple_sensitivity_analysis(parms_mad = phi_vals, 
                               parms_don = theta_vals, 
                               varied_parm_name_mad = "tau", 
@@ -762,7 +927,7 @@ mult_sens_analysis_phi_theta <- multiple_sensitivity_analysis(parms_mad = phi_va
                               init_states_don, init_states_mad, times, parms)
 
 # plot result
-grid.arrange(mult_sens_analysis_out[[2]])
+grid.arrange(mult_sens_analysis_phi_theta[[2]])
 
 tau_vals_2 <- seq(0.1, 400, by = 40)
 
