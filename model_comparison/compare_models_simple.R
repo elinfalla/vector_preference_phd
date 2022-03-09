@@ -329,72 +329,72 @@ analysis_parms_mad <- list(phi = seq(0, 20, length.out = num_parm_runs),
                            d = seq(0, 20, length.out = num_parm_runs))
 
 
-# sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
-#                                           parms_don = analysis_parms_don,
-#                                           init_states_don, 
-#                                           init_states_mad, 
-#                                           times, 
-#                                           parms)
-# 
-# ###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
-# don_res_only <- sens_analysis_res %>%
-#   filter(model == "Donnelly")
-# mad_res_only <- sens_analysis_res %>%
-#   filter(model == "Madden")
-# 
-# don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
-#                                                                                  aes(x = parm_val, 
-#                                                                                      y = final_I)) +
-#                             geom_line() +
-#                             labs(x = p))
-# 
-# mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
-#                                                                              aes(x = parm_val, 
-#                                                                                  y = final_I)) +
-#                             geom_line() +
-#                             labs(x = p))
-#   
-# # create table to be given alongside graphs giving default parameter values
-# parms_table <- round(data.frame(parms[names(parms) != "k1" &
-#                                      names(parms) != "lamda" &
-#                                      names(parms) != "T"]), 2)
-# parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
-# 
-# # ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
-# don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]], 
-#                         don_model_plots[[2]], 
-#                         don_model_plots[[3]],
-#                         don_model_plots[[4]],
-#                         don_model_plots[[5]], 
-#                         grid.rect(gp=gpar(col="white")), # empty space
-#                         nrow = 3, ncol = 2)
-# 
-# mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]], 
-#                         mad_model_plots[[2]], 
-#                         mad_model_plots[[3]],
-#                         mad_model_plots[[4]],
-#                         mad_model_plots[[5]], 
-#                         mad_model_plots[[6]],
-#                         nrow = 3, ncol = 2)
-# 
-# layout <- rbind(c(1,1,3),
-#                 c(1,1,4),
-#                 c(2,2,4),
-#                 c(2,2,4))
-# title <- textbox_grob("Simple models comparison - no vector dynamics or preference", 
-#                       gp = gpar(fontface = "bold",
-#                                 fontsize = 13),
-#                       padding = unit(c(0, 1, 0, 1), "cm"))
-# 
-# # create pdf file to print plot to
-# pdf(file = "sens_analysis_simple_models.pdf")
-# all_plots <- gridExtra::grid.arrange(don_plots, 
-#                                      mad_plots,
-#                                      title,
-#                                      parms_grob,
-#                                      layout_matrix = layout)
-# all_plots
-# dev.off()
+sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
+                                          parms_don = analysis_parms_don,
+                                          init_states_don,
+                                          init_states_mad,
+                                          times,
+                                          parms)
+
+###  CREATE DONNELLY AND MADDEN MODEL SENSITIVITY ANALYSIS PLOTS
+don_res_only <- sens_analysis_res %>%
+  filter(model == "Donnelly")
+mad_res_only <- sens_analysis_res %>%
+  filter(model == "Madden")
+
+don_model_plots <- lapply(unique(don_res_only$parm_name), function(p) ggplot(data = don_res_only[don_res_only$parm_name == p,],
+                                                                                 aes(x = parm_val,
+                                                                                     y = final_I)) +
+                            geom_line() +
+                            labs(x = p))
+
+mad_model_plots <- lapply(unique(mad_res_only$parm_name), function(p) ggplot(data = mad_res_only[mad_res_only$parm_name == p,],
+                                                                             aes(x = parm_val,
+                                                                                 y = final_I)) +
+                            geom_line() +
+                            labs(x = p))
+
+# create table to be given alongside graphs giving default parameter values
+parms_table <- round(data.frame(parms[names(parms) != "k1" &
+                                     names(parms) != "lamda" &
+                                     names(parms) != "T"]), 2)
+parms_grob <- tableGrob(parms_table, cols = c("Value")) # turn into grob (gtable) for plotting
+
+# ARRANGE PLOTS (AND PARAMETER TABLE) AND SAVE TO PDF
+don_plots <- gridExtra::arrangeGrob(don_model_plots[[1]],
+                        don_model_plots[[2]],
+                        don_model_plots[[3]],
+                        don_model_plots[[4]],
+                        don_model_plots[[5]],
+                        grid.rect(gp=gpar(col="white")), # empty space
+                        nrow = 3, ncol = 2)
+
+mad_plots <- gridExtra::arrangeGrob(mad_model_plots[[1]],
+                        mad_model_plots[[2]],
+                        mad_model_plots[[3]],
+                        mad_model_plots[[4]],
+                        mad_model_plots[[5]],
+                        mad_model_plots[[6]],
+                        nrow = 3, ncol = 2)
+
+layout <- rbind(c(1,1,3),
+                c(1,1,4),
+                c(2,2,4),
+                c(2,2,4))
+title <- textbox_grob("Simple models comparison - no vector dynamics or preference",
+                      gp = gpar(fontface = "bold",
+                                fontsize = 13),
+                      padding = unit(c(0, 1, 0, 1), "cm"))
+
+# create pdf file to print plot to
+pdf(file = "sens_analysis_simple_models.pdf")
+all_plots <- gridExtra::grid.arrange(don_plots,
+                                     mad_plots,
+                                     title,
+                                     parms_grob,
+                                     layout_matrix = layout)
+all_plots
+dev.off()
 
 
 ###################################################
