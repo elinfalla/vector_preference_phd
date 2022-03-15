@@ -531,8 +531,8 @@ dev.off()
 
 ##### INVESTIGATE BISTABILITY
 parms_new <- parms
-parms_new[["v"]] <- 0.40495960
-parms_new[["e"]] <- 0.001
+parms_new[["v"]] <- 0.3
+parms_new[["e"]] <- 0.2
 
 init_states <- c(I = 0.15*parms[["H"]])
 
@@ -542,11 +542,11 @@ trajectory_don <- data.frame(ode(y = init_states,
                                  func = donnelly_vpref_ode))
 
 # plot trajectory of infected plants and number of aphids
-plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
+don_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
   geom_line() +
   labs(x = "Time (days)",
        y = "Number of infected plants, I")
-plant_trajec
+don_trajec
 
 ## plot polynomial for I against I for both models
 gamma <- parms[["gamma"]]
@@ -575,7 +575,7 @@ coeff_0_mad <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w_mad)*A*v
 coeff_1_mad <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w_mad)*v*H) + phi^2*b*a*(1 - e*w_mad)*A*v
 coeff_2_mad <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w_mad)*v + phi*a*(1 - e*w_mad)*v^2)
 
-I <- seq(150, 600, length.out = 200)
+I <- seq(0, 600, length.out = 200)
 polynom_don <- coeff_0_don + coeff_1_don*I + coeff_2_don*I^2
 polynom_mad <- coeff_0_mad + coeff_1_mad*I + coeff_2_mad*I^2
 plot(x = I, y = polynom_don, type = "l")
@@ -598,8 +598,52 @@ alpha <- Pacq*Pinoc*theta*A*v*(1 - e*w_don)
 dI2 <- (alpha*(H - 2*I)*(w_don*(H + (v-1)*I)^2 - w_don*v*(1 - e)*(H*I + (v - 1)*I^2)) -
           alpha*(H*I - I^2)*(2*w_don*(H + (v - 1)*I)*(v - 1) - w_don*v*(1 - e)*(I + 2*(v - 1)*I))) /
   ((w_don*(H + (v - 1)*I)^2 - w_don*v*(1 - e)*(H*I + (v - 1)*I^2))^2) - gamma
-dI2 # one stable, one unstable equilibrium
+dI2 # one stable, one unstable equilibrium. there is an additional root at I=0 which is stable when R0<1.
+# therefore need to find out if in this area of the graph, R0 is <1
 
+#### HEATMAP OF R0 OVER V AND E VALUES
+v_e_vals <- expand.grid(V = v_vals, E = e_vals)
+
+# Calculate R0 for each combination of v and e values
+R0_df <- v_e_vals %>%
+  dplyr::mutate(R0 = parms[["theta"]]*(parms[["A"]]/parms[["H"]]) * (V*(1 - E*parms[["w_don"]])/parms[["w_don"]]) *
+                  (1/parms[["gamma"]]))
+
+# plot heatmap
+R0_heatmap_don <- ggplot(data = R0_df, aes(x = V, y = E, fill = R0)) +
+  geom_tile() + 
+  scale_fill_gradient2(low = "navyblue", mid = "white", high = "firebrick4", midpoint = 1,
+                       name = "R0 value", na.value = "black") +
+  labs(title = "Donnelly")
+R0_heatmap_don # R0<1 in area with multiple positive equilibriums. As one of these is stable, this shows bistability
+
+### plot trajectories to show example of bistability
+parms_new <- parms
+parms_new[["v"]] <- 0.3
+parms_new[["e"]] <- 0.2
+
+all_init_states <- seq(1, 0.8*parms[["H"]], length.out = 100)
+
+for (state in all_init_states) {
+  trajec <- data.frame(ode(y = c(I = state),
+                           times = seq(0, 15, by = 0.2),
+                           parms = parms_new,
+                           func = donnelly_vpref_ode))
+  trajec$I <- trajec$I/parms[["H"]] # make proportion
+  
+  # plot trajectory of infected plants and number of aphids
+  if (state == all_init_states[1]) {
+    trajec_plot <- ggplot(data = trajec, aes(x = time, y = I)) +
+      geom_line() +
+      labs(x = "Time (days)",
+           y = "Proportion of infected plants")
+  } else {
+    trajec_plot <- trajec_plot +
+      geom_line(data = trajec, aes(x = time, y = I))
+  }
+
+}
+trajec_plot
 
 #### INVESTIGATE RELATIONSHIP BETWEEN W_DON AND W_MAD
 # feeding probability for the 2 respective models
@@ -701,6 +745,10 @@ mult_sens_analysis_w_epsilon <- multiple_sensitivity_analysis(parms_mad = w_mad_
 # plot result
 grid.arrange(mult_sens_analysis_w_epsilon[[2]])
 
+
+pdf("mult_sens_anal_wmad_wdon.pdf")
+grid.arrange(mult_sens_analysis_w_epsilon[[2]])
+dev.off()
 
 ########################################
 ## ADDING VARIABLE PHI INTO MADDEN MODEL

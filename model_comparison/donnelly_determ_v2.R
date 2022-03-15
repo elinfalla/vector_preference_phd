@@ -262,7 +262,7 @@ parms <- c(
   theta = 1, # aphid dispersal rate per day
   a = 2, # reproduction rate per aphid per day
   K = 10, # aphid reproduction limit - maximum aphids per plant (diff to donnelly_stoch_sim.R)
-  H = 600, # number host plants
+  H = 400, # number host plants
   p = 0.2, # aphid emigration/death rate per journey between plants
   v = 1, # infected plant attractiveness
   e = 1, # infected plant acceptability 
