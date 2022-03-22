@@ -102,7 +102,7 @@ parms <- c(
   # k1 = 1/0.021, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
   # lamda = 1/0.021, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
   # T = 0.2, # time feeding/probing per plant visit (set to 0.5/phi in Madden model)
-  tau = 1.25, # rate of moving through infectious state in vector
+  tau = 4, # rate of moving through infectious state in vector
   w_mad = 0.2, # feeding probability on healthy plant
   phi = 3.5, # plants visited per day by an insect
   
@@ -358,6 +358,7 @@ layout <- rbind(c(1,2,3),
                 c(1,2,4),
                 c(1,2,4),
                 c(1,2,4))
+
 title <- textbox_grob("Model comparison with vector preference - constant vector population", 
                       gp = gpar(fontface = "bold",
                                 fontsize = 13),
@@ -373,6 +374,89 @@ all_plots <- gridExtra::grid.arrange(don_plots,
                                      widths = c(2,2,1))
 all_plots
 dev.off()
+
+##### FIND APPROPRIATE VALUES FOR THETA AND PHI BASED ON THE OTHER VALUES SO FINAL I IS 0.5
+find_theta_phi_vals <- function(theta_phi_data, init_states_don, init_states_mad, times, parms) {
+  
+  # function to find point at which epidemic takes off (final_I > 0) for phi and theta
+  
+  phi_data <- theta_phi_data %>% filter(parm_name == "phi")
+  theta_data <- theta_phi_data %>% filter(parm_name == "theta")
+  
+  phi_index <- match(TRUE, phi_data$final_I > 0.5) # finds first instance of final_I > 0
+  theta_index <- match(TRUE, theta_data$final_I > 0.5)
+  
+  if (is.na(phi_index)) {
+    if (is.na(theta_index)) {
+      stop("PHI AND THETA: No threshold found - final incidence always 0")
+    } else {
+      stop("PHI: No threshold found - final incidence always 0")
+    }
+  } 
+  else if (is.na(theta_index)) {
+    stop("THETA: No threshold found - final incidence always 0")
+  } 
+  else if (phi_index == 1 | theta_index == 1) {
+    stop("PHI/THETA: No threshold found - final incidence never 0")
+  }
+  # extract rows of data around the threshold
+  phi_subset <- phi_data[(phi_index-1):phi_index,]
+  theta_subset <- theta_data[(theta_index-1):theta_index,]
+  
+  # if the first instance where final disease incidence > 0 is smaller than 0.01, consider
+  # the estimate for the threshold accurate enough and return it
+  if (phi_subset[2, "final_I"] < 0.502 | theta_subset[2, "final_I"] < 0.502) {
+    
+    phi_thresh <- mean(c(phi_subset[1, "parm_val"], phi_subset[2, "parm_val"]))
+    theta_thresh <- mean(c(theta_subset[1, "parm_val"], theta_subset[2, "parm_val"]))
+    
+    return(c(phi_threshold = phi_thresh,
+             theta_threshold = theta_thresh))
+  }
+  
+  # else run find_epidemic_threshold() with new smaller parameter limits recursively until 
+  # above condition is reached
+  
+  phi_lower_lim <- phi_subset[1, "parm_val"]
+  phi_upper_lim <- phi_subset[2, "parm_val"]
+  
+  theta_lower_lim <- theta_subset[1, "parm_val"]
+  theta_upper_lim <- theta_subset[2, "parm_val"]
+  
+  num_parm_runs <- 100
+  theta_vals_condensed <- list(theta = seq(theta_lower_lim, theta_upper_lim, length.out = num_parm_runs))
+  
+  phi_vals_condensed <- list(phi = seq(phi_lower_lim, phi_upper_lim, length.out = num_parm_runs))
+  
+  # re-run sensitivity analysis
+  new_theta_phi_vals <- sensitivity_analysis(parms_mad = phi_vals_condensed,
+                                                 parms_don = theta_vals_condensed,
+                                                 init_states_don, 
+                                                 init_states_mad, 
+                                                 times, 
+                                                 parms)
+  new_theta_phi_vals$final_I <- new_theta_phi_vals$final_I / parms[["H"]]
+  
+  # feed back into function recursively
+  find_theta_phi_vals(new_theta_phi_vals, 
+                          init_states_don, 
+                          init_states_mad, 
+                          times, 
+                          parms)
+}
+
+theta_phi_data <- sens_analysis_res %>%
+  filter(parm_name == "phi" | parm_name == "theta") %>%
+  mutate(final_I = final_I/parms[["H"]])
+
+out <- find_theta_phi_vals(theta_phi_data,
+                               init_states_don, 
+                               init_states_mad, 
+                               times, 
+                               parms)
+
+parms[["phi"]] <- out[["phi_threshold"]]
+parms[["theta"]] <- out[["theta_threshold"]]
 
 ##### CREATE HEATMAPS OF V VS E for final incidence of disease
 
@@ -785,7 +869,8 @@ madden_cunniffe_vpref_ode <- function(times, y, par) {
 }
 
 ## add eta (average duration of a plant feed)
-parms[["eta"]] <- 2
+## parameterise eta so that phi is still the same value as before (see lab book for calc)
+parms[["eta"]] <- 1/(parms[["phi"]]*parms[["w_mad"]])
 
 ### RUN DONNELLY EPIDEMIC
 trajectory_don <- data.frame(ode(y = init_states_don,
@@ -817,7 +902,7 @@ new_plant_trajec <- new_plant_trajec +
             aes(x = time, y = number), color = "red") +
   annotate("text", label = "red = Madden\nblack = Donnelly", x = times[length(times)/3*2], y = 0)
 
-grid.arrange(plant_trajec, new_plant_trajec)
+new_plant_trajec
 
 #### RE-RUN HEATMAPS FOR NEW MADDEN MODEL
 
@@ -845,6 +930,9 @@ heatmap_mad_cun <- ggplot(data = v_e_df2, aes(x = v, y = e, fill = Madden_Cunnif
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
                        name = "Equilibrium\ni value", na.value = "white") +
   labs(title = "Madden (variable phi)")
+
+grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
+
 
 pdf("heatmaps_3_models.pdf", width = 7, height = 10)
 grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
