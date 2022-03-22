@@ -8,6 +8,9 @@
 ### by an SI rather than an SEIR model, vectors represented by an SI rather than SEI model. Vectors cannot be born 
 ### infective (as this model represents NPT viruses).
 
+### One version of the model has a fixed value of phi (number of plants visited pre day), the other has a variable value
+### of phi to account for the fact that feeding takes longer than probing, determined as defined by Cunniffe et al. 2021.
+
 ### DONNELLY MODEL:
 ### Modification of deterministic model by Donnelly et al. 2019 to make it more comparable to this version of the 
 ### Madden et al. 2000 model. Vector preference included but no vector population dynamics - constant vector population 
