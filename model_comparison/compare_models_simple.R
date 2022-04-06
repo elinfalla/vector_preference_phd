@@ -41,7 +41,7 @@ madden_simple_ode <- function(times, y, par) {
   stop_being_infective <- par[["tau"]] * y[["Z"]]
   
   # state equations
-  dX <- - acquisition + stop_being_infective
+  dX <- -acquisition + stop_being_infective
   dZ <- acquisition - stop_being_infective
   
   return(list(c(dI, dX, dZ)))
@@ -512,7 +512,7 @@ out["theta_threshold"] # 0.54
 parms_new <- parms
 parms_new["w"] <- 0.5
 
-# re-run sensitivity analysis for phi and theta when w = 1
+# re-run sensitivity analysis for phi and theta when w = 0.5
 new_w_res <- sensitivity_analysis(parms_mad = phi_vals,
                                       parms_don = theta_vals,
                                       init_states_don, 
@@ -793,8 +793,8 @@ dev.off()
 parms_test4 <- parms
 parms_test4[["w"]] <- 0.5
 
-varied_parm_vals <- data.frame(theta = 1:5, 
-                               phi = 1:5,
+varied_parm_vals <- data.frame(theta = 1:4, 
+                               phi = 1:4,
                                tau = H_vals/20)
 
 tau_prop_to_H_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
@@ -813,22 +813,23 @@ dev.off()
 parms_test5 <- parms
 parms_test5[["w"]] <- 0.5
 parms_test5[["A"]] <- 1600
+init_states_mad_test5 <- c(I = 1, X = 1600, Z = 0)
 
 varied_parm_vals <- data.frame(theta = 1:5, 
                                phi = 1:5, 
                                tau = 1:5)
 H_vals <- c(200, 400, 600, 800)
 
-tau_prop_to_phi_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+tau_equal_phi_bigA_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
                                    H_vals = H_vals, 
                                    parms = parms_test5,
                                    init_states_don = init_states_don, 
-                                   init_states_mad = init_states_mad, 
+                                   init_states_mad = init_states_mad_test5, 
                                    times = times)
 
 # create pdf of results
-pdf("tau_prop_to_phi_test.pdf", height = 12, width = 12)
-do.call("grid.arrange", c(tau_prop_to_phi_plots, ncol = nrow(varied_parm_vals)))
+pdf("tau_equal_phi_bigA_test.pdf", height = 12, width = 12)
+do.call("grid.arrange", c(tau_equal_phi_bigA_plots, ncol = nrow(varied_parm_vals)))
 dev.off()
 
 
@@ -975,8 +976,8 @@ w_tau_data <- sensitivity_analysis(parms_mad = tau_vals,
                                        times, 
                                        parms)
 
-plot_final_I <- ggplot(data = w_tau_data, aes(x = parm_val, y = final_I)) +
+plot_final_I_w_tau <- ggplot(data = w_tau_data, aes(x = parm_val, y = final_I)) +
   geom_line() +
   facet_wrap(~parm_name, scales = "free")
 
-plot_final_I
+plot_final_I_w_tau

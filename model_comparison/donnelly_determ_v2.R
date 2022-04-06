@@ -90,7 +90,7 @@ calc_A_equilibrium_optim <- function(parms, i, n_tests) {
   return(positive_equilibrium) # return equilibrium As and Ai values
 }
 
-calc_A_equilibrium <- function(coeff_1, coeff_2, coeff_3, coeff_4, parms, states, i_hat) {
+calc_A_equilibrium <- function(parms, states, i_hat) {
   
   # define states
   i <- states[["i"]]
@@ -177,14 +177,9 @@ donnelly_ode_func <- function(times, states, parms) {
   # derived from analysis of markov chain (see Donnelly 2019, Appendix S1)
   xi <- (q^2*Pacq*Pinoc*i_hat*(1 - e*w)*(1 - i_hat))/(p + q*w*(1 - i_hat*(1 - e)))
   
-
-  
   # calculate equilibrium level of As and Ai for current value of i
   # = per plant aphid density on susceptible (As)  and infected (Ai) plants
-  
-
-  # 2. plug into calc_A_equilibrium function
-  As_Ai <- calc_A_equilibrium(coeff_1, coeff_2, coeff_3, coeff_4, parms, states, i_hat)
+  As_Ai <- calc_A_equilibrium(parms, states, i_hat)
   As <- As_Ai[1]
   Ai <- As_Ai[2]
   

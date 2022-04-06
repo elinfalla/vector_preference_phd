@@ -521,7 +521,7 @@ find_I_equilibrium <- function(parms, model, mult_eq_return_NA=T) {
   else {
     stop("model must be either 'Donnelly', 'Madden' or 'Madden_Cunniffe")
   }
-  #if (model == "Madden" & v > 4 & e < 1) {browser()}
+
   # solve for I using coefficients to get all equilibrimus
   equilibriums <- polyroot(c(coeff_0, coeff_1, coeff_2))
   
@@ -730,7 +730,11 @@ for (state in all_init_states) {
   }
 
 }
+trajec_plot <- trajec_plot +
+  annotate("text", label = paste("v =", parms_new[["v"]], ", e =", parms_new[["e"]]), 
+           x = 12, y = 0.1)
 trajec_plot
+
 
 #### INVESTIGATE RELATIONSHIP BETWEEN W_DON AND W_MAD
 # feeding probability for the 2 respective models
@@ -909,8 +913,8 @@ new_plant_trajec
 
 #### RE-RUN HEATMAPS FOR NEW MADDEN MODEL
 
-v_vals <- seq(0.001, 5, length.out = 100)
-e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in madden e*w must be < 1
+v_vals <- seq(0.001, 1/parms[["w_don"]], length.out = 100)
+e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # e*w must be < 1 for both models
 
 # create heatmap data
 v_e_df2 <- create_heatmap_data(e_vals, v_vals, models = c("Donnelly", "Madden", "Madden_Cunniffe"), parms)
@@ -940,3 +944,4 @@ grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
 pdf("heatmaps_3_models.pdf", width = 7, height = 10)
 grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
 dev.off()
+
