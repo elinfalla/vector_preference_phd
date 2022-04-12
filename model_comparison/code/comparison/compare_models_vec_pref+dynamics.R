@@ -57,8 +57,8 @@ madden_vdynamic_ode <- function(times, y, par) {
   emigration_Z <- par[["phi"]] * par[["p"]] * y[["Z"]]
   
   # state equations
-  dX <- stop_being_infective - acquisition + birth - death_X - emigration_X
-  dZ <- acquisition - stop_being_infective - death_Z - emigration_Z
+  dX <- stop_being_infective - acquisition + birth - death_X #- emigration_X
+  dZ <- acquisition - stop_being_infective - death_Z #- emigration_Z
   
 
   return(list(c(dI, dX, dZ)))
@@ -413,6 +413,7 @@ don_full_plant_trajec <- ggplot(data = trajec_don_full,
 don_full_plant_trajec
 
 
+
 ###### ANALYSE WHETHER SIMPLIFIED DONNELLY MODEL IS A GOOD APPROX FOR FULL MODEL ######
 
 calc_AUDPC_diff <- function(parm_vals, x_parm_names, y_parm_names, 
@@ -507,7 +508,7 @@ v_e_don_comparison
 
 #############
 
-### DO SENSITIVITY ANALYSIS FOR PHI AND THETA
+### DO SENSITIVITY ANALYSIS 
 
 vary_param <- function(init_states, times, parms, varied_parm_name, varied_parm_vals, func, model) {
   
@@ -623,10 +624,7 @@ sens_analysis_res <- sensitivity_analysis(parms_mad = analysis_parms_mad,
 
 # plot (to pdf)
 sens_anal_plots <- lapply(unique(sens_analysis_res$model), function(m){
-  print(m)
   apply(unique(sens_analysis_res %>% filter(model == m) %>% select(parm_name)), 1, function(p) {
-    print(p)
-    print(m)
     ggplot(data = sens_analysis_res %>% filter(model == m & parm_name == p),
            aes(x = parm_val,
                y = final_I)) +
@@ -751,7 +749,7 @@ find_i_equilibrium <- function(v_e_vals, init_states, parms, func) {
   }
   
   init_states[1] <- low_i
-  times <- seq(0, 200, length.out = 2)
+  times <- seq(0, 10000, length.out = 2)
   equilibrium_val_low_start <- round(data.frame(ode(y = init_states,
                                      times = times,
                                      func = func,
@@ -792,7 +790,6 @@ heatmap_don <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_don)) +
                        name = "Equilibrium\ni value", 
                        na.value = "white",) +
   labs(title = "Donnelly")
-heatmap_don
 
 heatmap_mad <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_mad)) +
   geom_tile() +
