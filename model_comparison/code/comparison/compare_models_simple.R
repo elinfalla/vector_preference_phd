@@ -23,8 +23,9 @@ library(dplyr)
 library(gridExtra)
 library(grid) 
 library(gridtext)
+library(scales)
 
-#### DEFINE MADDEN ODE
+#### DEFINE MADDEN ODE ####
 madden_simple_ode <- function(times, y, par) {
   
   # PLANT EQUATIONS
@@ -47,7 +48,7 @@ madden_simple_ode <- function(times, y, par) {
   return(list(c(dI, dX, dZ)))
 }
 
-#### DEFINE DONNELLY ODE
+#### DEFINE DONNELLY ODE ####
 donnelly_simple_ode <- function(times, states, parms) {
   
   # STATES
@@ -85,6 +86,7 @@ donnelly_simple_ode <- function(times, states, parms) {
   return(list(di))
 }
 
+#### DEFINE PARMS, TIME FRAME, INIT STATES ####
 # define timeframe
 times <- seq(0, 40, by = 0.4)
 
@@ -156,6 +158,7 @@ init_states_mad <- c(
   Z = 0 # number infective insects
 )
 
+#### RUN EPIDEMICS ####
 # ### RUN DONNELLY EPIDEMIC
 # trajectory_don <- data.frame(ode(y = init_states_don, 
 #                              times = times, 
@@ -183,46 +186,7 @@ init_states_mad <- c(
 #             aes(x = time, y = number), color = "red") 
 # plant_trajec
 
-
-# param_vs_final_I <- function(init_states_don, init_states_mad, times, parms, varied_parms_vals) {
-#   
-#   ### describe function here
-#   
-#   # initialise output data frame
-#   params <- varied_parms_vals %>% slice(rep(1:n(), times = 2))
-#   
-#   output <- data.frame(params,
-#                        final_I = rep(NA, length.out = nrow(params)),
-#                        model = rep(c("Donnelly", "Madden"), each = nrow(params)/2))
-#   
-#   final_I_don <- c()
-#   final_I_mad <- c()
-#   
-#   parm_names_grep <- paste("^", names(varied_parms_vals), sep = "", collapse = "|")
-#   
-#   for (run in 1:length(varied_parms_vals)) {
-#     
-#     parms[grepl(parm_names_grep, names(parms))] <- varied_parms_vals[run,]
-#     
-#     trajectory_don <- data.frame(ode(y = init_states_don, 
-#                                  times = times, 
-#                                  parms = parms, 
-#                                  func = donnelly_simple_ode))
-#     final_I_don <- c(final_I_don, round(trajectory_don[nrow(trajectory_don), "I"], 3))
-#     
-#     trajectory_mad <- data.frame(ode(y = init_states_mad, 
-#                                  times = times, 
-#                                  parms = parms, 
-#                                  func = madden_simple_ode))
-#     final_I_mad <- c(final_I_mad, round(trajectory_mad[nrow(trajectory_mad), "I"], 3))
-#     
-#   }
-#   output[,"final_I"] <- c(final_I_don, final_I_mad)
-#   
-#   return(output)
-# }
-
-
+#### SENSITIVITY ANALYSIS ####
 
 vary_param_don <- function(init_states_don, times, parms, varied_parm_name, varied_parm_vals) {
   
@@ -387,7 +351,7 @@ title <- textbox_grob("Simple models comparison - no vector dynamics or preferen
                       padding = unit(c(0, 1, 0, 1), "cm"))
 
 # create pdf file to print plot to
-pdf(file = "sens_analysis_simple_models.pdf")
+pdf(file = "results/sens_analysis_simple_models.pdf")
 all_plots <- gridExtra::grid.arrange(don_plots,
                                      mad_plots,
                                      title,
@@ -503,7 +467,7 @@ out <- find_epidemic_threshold(theta_phi_data,
 out["phi_threshold"] # 2.88
 out["theta_threshold"] # 0.54
 
-############
+### INVESTIGATION OF PHI/THETA RELATIONSHIP TO W ####
 ### relationship between phi and theta depends on w (feeding rate)
 # w = 0.5 gives expected value of 1 probe per dispersal, making phi and theta equivalent
 # see lab book for explanation
@@ -555,15 +519,36 @@ threshold["theta_threshold"] # 2.157943
 
 ## plot w (feeding rate) against 1-w/w (expected number of probes per dispersal)
 # see lab book for derivation
-w <- seq(0,1,by=0.02)
-plot(w, (1-w)/w, 
-     type = "l",
-     xlab = "w, feeding rate",
-     ylab = "(1-w)/w, expected number of plant probes per dispersal")
+
+w <- seq(0.01,1,by=0.01)
+probes_per_dispersal <- data.frame(w = w,
+                                   expected_probes_per_dispersal = (1-w)/w)
+probes_per_dispersal_plot <- ggplot(data = probes_per_dispersal,
+                                    aes(x = w, y = expected_probes_per_dispersal)) +
+  geom_line(size = 0.8) +
+  theme_bw() +
+  theme(text = element_text(size = 15),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        strip.text = element_text(face = "bold", size = 14)) +
+  labs(x = expression(paste(omega, ", feeding probability")), 
+       y = expression(paste(frac(1-omega,omega), ", expected number of plant probes per aphid dispersal")),
+       title = "a)")
+probes_per_dispersal_plot
+
+pdf("results/expected_probes_per_dispersal.pdf")
+probes_per_dispersal_plot
+dev.off()
+
+# par(mfrow=c(1,1))
+# plot(w, (1-w)/w, 
+#      type = "l",
+#      xlab = "w, feeding rate",
+#      ylab = "(1-w)/w, expected ")
 
 
-#####
-### try varying phi and tau simultaneously
+
+### try varying phi and tau simultaneously ####
 # making phi = tau may help equate the models (see lab book)
 
 vary_2_param_mad <- function(init_states_mad, times, parms, varied_parm_name1, varied_parm_name2, varied_parm_vals) {
@@ -573,9 +558,10 @@ vary_2_param_mad <- function(init_states_mad, times, parms, varied_parm_name1, v
   # returns data frame of final incidence, I, of all runs, along with values of varied parameter
   
   # initialise output data frame
-  parm_names <- paste(varied_parm_name1, varied_parm_name2, sep = ",")
+  parm_names <- paste(varied_parm_name1, varied_parm_name2, sep = "*', '*")
+  parm_names <- paste0(parm_names, "*' (Madden)'")
   
-  output <- data.frame(parm_names = rep(parm_names, length(varied_parm_vals)),
+  output <- data.frame(parm_name = rep(parm_names, length(varied_parm_vals)),
                        parm_val = varied_parm_vals,
                        final_I = rep(NA, length(varied_parm_vals)),
                        model = rep("Madden", length(varied_parm_vals))
@@ -604,11 +590,29 @@ phi_tau_df <- vary_2_param_mad(init_states_mad,
                               "tau", 
                               unlist(unname(phi_vals)))
 
-tau_phi_plot_final_I <- ggplot(data = phi_tau_df, aes(x = parm_val, y = final_I)) +
+rename_theta_data <- new_w_res %>% 
+  filter(parm_name == "theta") %>%
+  mutate(parm_name = "theta*' (Donnelly)'")
+
+phi_tau_theta_comparison_df <- rbind(phi_tau_df, rename_theta_data)
+
+tau_phi_theta_plot_final_I <- ggplot(data = phi_tau_theta_comparison_df, aes(x = parm_val, y = final_I, colour = parm_name)) +
   geom_line() +
-  annotate("text", label = unique(phi_tau_df$parm_names), x = 0, y = 350) +
-  ylim(0, 400)
-tau_phi_plot_final_I
+  theme_bw() +
+  theme(text = element_text(size = 15),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        strip.text = element_text(face = "bold", size = 14)) +
+  labs(x = "Value of parameter(s)",
+       y = "Final disease incidence",
+       colour = "Varying\nparameter(s)") +
+  scale_colour_manual(labels = scales::parse_format(),
+                      values = c("red", "blue"))
+tau_phi_theta_plot_final_I
+
+pdf("results/phi_tau_theta_covary.pdf", height = 5, width = 7)
+tau_phi_theta_plot_final_I
+dev.off()
 
 w_plot_final_I_theta_only <- ggplot(data = new_w_res %>% filter(parm_name == "theta"), 
                                     aes(x = parm_val, y = final_I)) +
@@ -617,27 +621,27 @@ w_plot_final_I_theta_only <- ggplot(data = new_w_res %>% filter(parm_name == "th
   annotate("text", label = "theta", x = 0, y = 350) +
   ylim(0, 400)
 
-grid.arrange(tau_phi_plot_final_I, w_plot_final_I_theta_only)
+#grid.arrange(tau_phi_plot_final_I, w_plot_final_I_theta_only)
 
 ### zoom in to see epidemic threshold
-phi_tau_zoom_df <- vary_2_param_mad(init_states_mad, 
-                               times, 
-                               parms_new, 
-                               "phi", 
-                               "tau", 
-                               unlist(unname(zoom_phi_vals)))
-
-zoom_tau_phi_plot_final_I <- ggplot(data = phi_tau_zoom_df, aes(x = parm_val, y = final_I)) +
-  geom_line() +
-  annotate("text", label = unique(phi_tau_df$parm_names), x = 0, y = 350)
-
-zoom_plot_final_I_theta_only <- ggplot(data = w_res_zoom %>% filter(parm_name == "theta"),
-                                       aes(x = parm_val, y = final_I)) +
-  geom_line() +
-  annotate("text", label = paste("w =", parms_new[["w"]]), x = 4.5, y = 1) +
-  annotate("text", label = "theta", x = 0, y = 200)
-
-grid.arrange(zoom_tau_phi_plot_final_I, zoom_plot_final_I_theta_only)
+# phi_tau_zoom_df <- vary_2_param_mad(init_states_mad, 
+#                                times, 
+#                                parms_new, 
+#                                "phi", 
+#                                "tau", 
+#                                unlist(unname(zoom_phi_vals)))
+# 
+# zoom_tau_phi_plot_final_I <- ggplot(data = phi_tau_zoom_df, aes(x = parm_val, y = final_I)) +
+#   geom_line() +
+#   annotate("text", label = unique(phi_tau_df$parm_names), x = 0, y = 350)
+# 
+# zoom_plot_final_I_theta_only <- ggplot(data = w_res_zoom %>% filter(parm_name == "theta"),
+#                                        aes(x = parm_val, y = final_I)) +
+#   geom_line() +
+#   annotate("text", label = paste("w =", parms_new[["w"]]), x = 4.5, y = 1) +
+#   annotate("text", label = "theta", x = 0, y = 200)
+# 
+# grid.arrange(zoom_tau_phi_plot_final_I, zoom_plot_final_I_theta_only)
 
 ## look at similarity between phi and theta vs final_I when tau = 2, not 4
 parms_new["tau"] <- 2
@@ -666,7 +670,7 @@ threshold <- find_epidemic_threshold(new_tau_res,
 threshold["phi_threshold"] 
 threshold["theta_threshold"] 
 
-## test idea that epidemic trajectories are similar when phi = theta, w=0.5, tau=2
+### FIND VALUES OF PHI, THETA, TAU, W FOR WHICH EPIDEMIC TRAJECTORIES ARE MOST SIMILAR ####
 vary_trajec <- function(varied_parm_vals, H_vals, 
                         init_states_don, init_states_mad, times, parms) {
   
@@ -679,12 +683,17 @@ vary_trajec <- function(varied_parm_vals, H_vals,
   all_combos <- cbind(all_combos, varied_parm_vals[,-1])
   names(all_combos)[1] <- names(varied_parm_vals)[1]
   
-  # initialise plot list
-  plots <- list()
+  # create facet name for varied vals
+  facet_name <- paste(names(varied_parm_vals), collapse = " = ")
+  facet_name <- paste(facet_name, "=")
+  
+  # initialise output dataframe
+  all_data <- data.frame(matrix(ncol = 5, nrow = 0))
   
   for (i in 1:nrow(all_combos)) {
     
-    for (col in 1:ncol(all_combos)) {
+    # change parm vals to be numbers in this row of all_combos
+    for (col in 1:ncol(all_combos)) { 
       parm_name <- names(all_combos)[col]
       
       parms[[parm_name]] <- all_combos[i, parm_name]
@@ -701,52 +710,72 @@ vary_trajec <- function(varied_parm_vals, H_vals,
                                      times = times,
                                      func = madden_simple_ode,
                                      parms = parms))
+
     
-    # turn madden output into long format
-    trajectory_mad_long <- reshape2::melt(trajectory_mad, id.vars = "time")
-    names(trajectory_mad_long) <- c("time", "compartment", "number")
+    ## add to dataframe of all data
+    trajec_data <- data.frame(time = c(trajectory_don$time, trajectory_mad$time),
+                             I = c(trajectory_don$I, trajectory_mad$I),
+                             model = rep(c("Donnelly", "Madden"), each = nrow(trajectory_mad)),
+                             H_val = rep(paste("H =", all_combos[i, "H"]), nrow(trajectory_mad)*2),
+                             varied_val = rep(paste(facet_name, all_combos[i, 1])))
     
-    # plot donnelly trajectory 
-    plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
-      geom_line()  +
-      ylim(0, parms[["H"]])
-    
-    # plot madden trajectory on same plot
-    plant_trajec <- plant_trajec +
-      geom_line(data = trajectory_mad_long %>% filter(compartment == "I"),
-                aes(x = time, y = number), color = "red") +
-      annotate("text", label = paste("red = Madden\n", all_combos[i,1], all_combos[i,2]), 
-               x = times[length(times)/3*2], y = parms[["H"]]*2/3, size = 3)
-    
-    # store plot in list
-    plots[[i]] <- plant_trajec
+    all_data <- rbind(all_data, trajec_data)
     
   }
   
-  return(plots)
+  # all_plots <- ggplot(data=all_data, aes(x = time, y = I, colour = model)) +
+  #   facet_grid(vars(H_val), vars(varied_val), label = "label_parsed") +
+  #   geom_line() +
+  #   scale_color_discrete(labels = parse_format())
+  # 
+  return(all_data)
 }
 
 ### TEST 1: tau = phi = theta, w = 0.5
 parms_test1 <- parms
 parms_test1[["w"]] <- 0.5
 
-varied_parm_vals <- data.frame(theta = 1:5, 
-                         phi = 1:5, 
-                         tau = 1:5)
+varied_parm_vals <- data.frame(theta = 2:5, 
+                         phi = 2:5, 
+                         tau = 2:5)
 H_vals <- c(200, 400, 600, 800)
 
-tau_equal_phi_plots <- vary_trajec(varied_parm_vals = varied_parm_vals, 
+tau_equal_phi_data <- vary_trajec(varied_parm_vals = varied_parm_vals, 
                      H_vals = H_vals, 
                      parms = parms_test1,
                      init_states_don = init_states_don, 
                      init_states_mad = init_states_mad, 
                      times = times)
 
-# create pdf of results
-pdf("tau_equal_phi_test.pdf", height = 12, width = 12#, paper = "a4"
-)
-do.call("grid.arrange", c(tau_equal_phi_plots, ncol = nrow(varied_parm_vals)))
+tau_equal_phi_data <- tau_equal_phi_data %>% # change parm cols so can be parsed as expressions
+  mutate(H_val = paste0("'", H_val, "'"),
+         varied_val = recode_factor(varied_val,
+                                    "theta = phi = tau = 2" = "theta*' = '*phi*' = '*tau*' = 2'",
+                                    "theta = phi = tau = 3" = "theta*' = '*phi*' = '*tau*' = 3'",
+                                    "theta = phi = tau = 4" = "theta*' = '*phi*' = '*tau*' = 4'",
+                                    "theta = phi = tau = 5" = "theta*' = '*phi*' = '*tau*' = 5'",
+                                    ))
 
+all_plots <- ggplot(data = tau_equal_phi_data, aes(x = time, y = I, colour = model)) +
+  facet_grid(vars(H_val), vars(varied_val), label = "label_parsed") +
+  geom_line() +
+  theme_bw() +
+  theme(text = element_text(size = 17),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        strip.text = element_text(face = "bold", size = 17),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 15)) +
+  scale_colour_manual(values = c("blue", "red")) +
+  labs(x = "Time (arbitrary units)",
+       y = "Number of infected plants, I") +
+  theme(legend.title = element_blank(), legend.position = "bottom")
+all_plots
+
+# create pdf of results
+pdf("results/tau_equal_phi_test.pdf", height = 12, width = 12)
+all_plots
 dev.off()
 
 ### TEST 2: tau = 0, phi=theta, w = 0.5
@@ -765,9 +794,9 @@ tau_equal_zero_plots <- vary_trajec(varied_parm_vals = varied_parm_vals,
                                    times = times)
 
 # create pdf of results
-pdf("tau_equal_zero_test.pdf", height = 12, width = 12)
-do.call("grid.arrange", c(tau_equal_zero_plots, ncol = nrow(varied_parm_vals)))
-dev.off()
+# pdf("results/tau_equal_zero_test.pdf", height = 12, width = 12)
+# do.call("grid.arrange", c(tau_equal_zero_plots, ncol = nrow(varied_parm_vals)))
+# dev.off()
 
 ### TEST 3: tau = 2, phi=theta, w = 0.5
 parms_test3 <- parms
@@ -785,7 +814,7 @@ tau_equal_one_plots <- vary_trajec(varied_parm_vals = varied_parm_vals,
                                     times = times)
 
 # create pdf of results
-pdf("tau_equal_one_test.pdf", height = 12, width = 12)
+pdf("results/tau_equal_one_test.pdf", height = 12, width = 12)
 do.call("grid.arrange", c(tau_equal_one_plots, ncol = nrow(varied_parm_vals)))
 dev.off()
 
@@ -805,7 +834,7 @@ tau_prop_to_H_plots <- vary_trajec(varied_parm_vals = varied_parm_vals,
                                    times = times)
 
 # create pdf of results
-pdf("tau_prop_to_H_test.pdf", height = 12, width = 12)
+pdf("results/tau_prop_to_H_test.pdf", height = 12, width = 12)
 do.call("grid.arrange", c(tau_prop_to_H_plots, ncol = nrow(varied_parm_vals)))
 dev.off()
 
@@ -828,13 +857,12 @@ tau_equal_phi_bigA_plots <- vary_trajec(varied_parm_vals = varied_parm_vals,
                                    times = times)
 
 # create pdf of results
-pdf("tau_equal_phi_bigA_test.pdf", height = 12, width = 12)
+pdf("results/tau_equal_phi_bigA_test.pdf", height = 12, width = 12)
 do.call("grid.arrange", c(tau_equal_phi_bigA_plots, ncol = nrow(varied_parm_vals)))
 dev.off()
 
 
-#########
-### RUN SENSITIVITY ANALYSIS OF PHI AND THETA FOR VARYING TAU AND W VALUES
+### RUN SENSITIVITY ANALYSIS OF PHI AND THETA FOR VARYING TAU AND W VALUES ####
 
 multiple_sensitivity_analysis <- function(parms_mad, parms_don, 
                                           varied_parm_name_mad, varied_parm_val_mad, 
@@ -941,8 +969,8 @@ mult_sens_analysis_phi_theta_2 <- multiple_sensitivity_analysis(parms_mad = phi_
                                                         init_states_don, init_states_mad, times, parms)
 grid.arrange(mult_sens_analysis_phi_theta_2[[2]])
 
-#########
-### RUN SENSITIVITY ANALYSIS OF W AND TAU FOR VARYING PHI AND THETA VALUES
+
+### RUN SENSITIVITY ANALYSIS OF W AND TAU FOR VARYING PHI AND THETA VALUES ####
 
 w_vals_list <- list(w = seq(0.001, 0.999, length.out = 100))
 tau_vals_list <- list(tau = seq(0, 50, length.out = 100))

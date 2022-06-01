@@ -26,6 +26,8 @@ library(gridExtra)
 library(grid)
 library(gridtext)
 library(flux)
+library(nleqslv) #non linear equation solver
+library(parallel) # run code in parallel
 
 #### DEFINE MADDEN (fixed phi) ODE
 madden_vdynamic_ode <- function(times, y, par) {
@@ -40,7 +42,6 @@ madden_vdynamic_ode <- function(times, y, par) {
   
   # state equation
   dI <- become_infected - natural_death_I - virus_induced_death
-  #di <- dI/parms[["H"]]
   
   # VECTOR EQUATIONS
   A <- y[["X"]] + y[["Z"]]
@@ -57,8 +58,8 @@ madden_vdynamic_ode <- function(times, y, par) {
   emigration_Z <- par[["phi"]] * par[["p"]] * y[["Z"]]
   
   # state equations
-  dX <- stop_being_infective - acquisition + birth - death_X #- emigration_X
-  dZ <- acquisition - stop_being_infective - death_Z #- emigration_Z
+  dX <- stop_being_infective - acquisition + birth - death_X - emigration_X
+  dZ <- acquisition - stop_being_infective - death_Z - emigration_Z
   
 
   return(list(c(dI, dX, dZ)))
@@ -465,46 +466,46 @@ get_AUDPC_diff_data <- function(x_parm_names, y_parm_names, x_parm_vals, y_parm_
   return(all_parm_combos)
 }
 
-AUDPC_Pacq_Pinoc_theta <- get_AUDPC_diff_data(x_parm_name = "theta",
-                                              y_parm_name = c("Pacq", "Pinoc"),
-                                              x_parm_vals = seq(0.00001, 5, length.out = 30),
-                                              y_parm_vals = seq(0, 1, length.out = 30),
-                                              func1 = donnelly_full_vdynamic_ode,
-                                              func2 = donnelly_simp_vdynamic_ode,
-                                              parms = parms,
-                                              init_states_func1 = init_states_don_full,
-                                              init_states_func2 = init_states_don_simp,
-                                              times = times)
-
-Pacq_Pinoc_theta_don_comparison <- ggplot(data = AUDPC_Pacq_Pinoc_theta,
-                                          aes(x = theta, y = Pacq_Pinoc, fill = AUDPC_diff)) +
-  geom_tile() +
-  scale_fill_gradient(low = "red", high = "blue",
-                       name = "Absolute\ndifference\nin AUDPC", na.value = "white") +
-  labs(y = "Pacq/Pinoc")
-Pacq_Pinoc_theta_don_comparison
-
-AUDPC_v_e <- get_AUDPC_diff_data(x_parm_name = "v",
-                                 y_parm_name = "e",
-                                 x_parm_vals = seq(0.001, 1/parms[["w_don"]], length.out = 100),
-                                 y_parm_vals = seq(0.001, 1/parms[["w_mad"]], length.out = 100),
-                                 func1 = donnelly_full_vdynamic_ode,
-                                 func2 = donnelly_simp_vdynamic_ode,
-                                 parms = parms,
-                                 init_states_func1 = init_states_don_full,
-                                 init_states_func2 = init_states_don_simp,
-                                 times = times)
-
-v_e_don_comparison <- ggplot(data = AUDPC_v_e,
-                             aes(x = v, y = e, fill = AUDPC_diff)) +
-  geom_tile() +
-  scale_fill_gradientn(colors = c("darkred", "red", "blue", "navyblue"),
-                       values = scales::rescale(c(0, min(AUDPC_v_e$AUDPC_diff), 1, max(AUDPC_v_e$AUDPC_diff))),
-                       limits = c(0, max(AUDPC_v_e$AUDPC_diff)),
-                       name = "Absolute difference\nin AUDPC",
-                       na.value = "white",
-                       guide = guide_colorbar(barheight = unit(8, "cm"), barwidth = unit(1.5, "cm")))
-v_e_don_comparison
+# AUDPC_Pacq_Pinoc_theta <- get_AUDPC_diff_data(x_parm_name = "theta",
+#                                               y_parm_name = c("Pacq", "Pinoc"),
+#                                               x_parm_vals = seq(0.00001, 5, length.out = 30),
+#                                               y_parm_vals = seq(0, 1, length.out = 30),
+#                                               func1 = donnelly_full_vdynamic_ode,
+#                                               func2 = donnelly_simp_vdynamic_ode,
+#                                               parms = parms,
+#                                               init_states_func1 = init_states_don_full,
+#                                               init_states_func2 = init_states_don_simp,
+#                                               times = times)
+# 
+# Pacq_Pinoc_theta_don_comparison <- ggplot(data = AUDPC_Pacq_Pinoc_theta,
+#                                           aes(x = theta, y = Pacq_Pinoc, fill = AUDPC_diff)) +
+#   geom_tile() +
+#   scale_fill_gradient(low = "red", high = "blue",
+#                        name = "Absolute\ndifference\nin AUDPC", na.value = "white") +
+#   labs(y = "Pacq/Pinoc")
+# Pacq_Pinoc_theta_don_comparison
+# 
+# AUDPC_v_e <- get_AUDPC_diff_data(x_parm_name = "v",
+#                                  y_parm_name = "e",
+#                                  x_parm_vals = seq(0.001, 1/parms[["w_don"]], length.out = 100),
+#                                  y_parm_vals = seq(0.001, 1/parms[["w_mad"]], length.out = 100),
+#                                  func1 = donnelly_full_vdynamic_ode,
+#                                  func2 = donnelly_simp_vdynamic_ode,
+#                                  parms = parms,
+#                                  init_states_func1 = init_states_don_full,
+#                                  init_states_func2 = init_states_don_simp,
+#                                  times = times)
+# 
+# v_e_don_comparison <- ggplot(data = AUDPC_v_e,
+#                              aes(x = v, y = e, fill = AUDPC_diff)) +
+#   geom_tile() +
+#   scale_fill_gradientn(colors = c("darkred", "red", "blue", "navyblue"),
+#                        values = scales::rescale(c(0, min(AUDPC_v_e$AUDPC_diff), 1, max(AUDPC_v_e$AUDPC_diff))),
+#                        limits = c(0, max(AUDPC_v_e$AUDPC_diff)),
+#                        name = "Absolute difference\nin AUDPC",
+#                        na.value = "white",
+#                        guide = guide_colorbar(barheight = unit(8, "cm"), barwidth = unit(1.5, "cm")))
+# v_e_don_comparison
 
 #############
 
@@ -512,7 +513,7 @@ v_e_don_comparison
 
 vary_param <- function(init_states, times, parms, varied_parm_name, varied_parm_vals, func, model) {
   
-  # function to run the Madden ODE multiple times with one parameter varying, as specified by user.
+  # function to run a model ODE multiple times with one parameter varying, as specified by user.
   # returns data frame of final incidence, I, of all runs, along with values of varied parameter
   
   # initialise output data frame
@@ -634,7 +635,7 @@ sens_anal_plots <- lapply(unique(sens_analysis_res$model), function(m){
 )
 
 
-pdf("sens_analysis_vec_dynamics_models.pdf")
+pdf("results/sens_analysis_vec_dynamics_models.pdf")
 do.call("grid.arrange", sens_anal_plots[[1]])
 do.call("grid.arrange", sens_anal_plots[[2]])
 do.call("grid.arrange", sens_anal_plots[[3]])
@@ -732,76 +733,586 @@ out[["theta_threshold"]] # 0.9683637
 parms[["phi"]] <- out[["phi_threshold"]]
 parms[["theta"]] <- out[["theta_threshold"]]
 
+# recalculate eta
+parms[["eta"]] <- 1/(parms[["phi"]]*parms[["w_mad"]])
 
-# CALCULATE EQUILIBRIUM DISEASE INCIDENCE FOR DONNELLY
 
-find_i_equilibrium <- function(v_e_vals, init_states, parms, func) {
+# CALCULATE EQUILIBRIUM DISEASE INCIDENCE BY RUNNING MODELS TO LARGE TMAX FROM LOW AND HIGH STARTING VALS
+
+# find_i_equilibrium_manual <- function(v_e_vals, init_states, parms, func) {
+#   
+#   parms[["v"]] <- v_e_vals[1]
+#   parms[["e"]] <- v_e_vals[2]
+#   
+#   if ("i" %in% names(init_states)) {
+#     low_i <- 0.0001
+#     high_i <- 0.9999
+#   } else {
+#     low_i <- 0.0001*parms[["H"]]
+#     high_i <- 0.9999*parms[["H"]]
+#   }
+#   
+#   init_states[1] <- low_i
+#   times <- seq(0, 10000, length.out = 2)
+#   equilibrium_val_low_start <- round(data.frame(ode(y = init_states,
+#                                      times = times,
+#                                      func = func,
+#                                      parms = parms))[length(times), 2], 5)
+#  
+#   init_states[1] <- high_i
+#   equilibrium_val_high_start <-  round(data.frame(ode(y = init_states,
+#                                                 times = times,
+#                                                 func = func,
+#                                                 parms = parms))[length(times), 2], 5)
+#   
+#   if ("I" %in% names(init_states)) {
+#     equilibrium_val_low_start <- equilibrium_val_low_start/parms[["H"]]
+#     equilibrium_val_high_start <- equilibrium_val_high_start/parms[["H"]]
+#   }
+#   
+#   if (equilibrium_val_low_start != equilibrium_val_high_start) {
+#     return(NA)
+#   }
+#   return(equilibrium_val_low_start)
+# 
+# }
+# v_vals <- seq(0.001, 5, length.out = 100)
+# e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in madden e*w must be < 1
+# v_e_vals <- expand.grid(v = v_vals, e = e_vals)
+# 
+# v_e_vals$I_eq_don <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_don_full, parms, donnelly_full_vdynamic_ode)
+# v_e_vals$I_eq_mad <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_mad, parms, madden_vdynamic_ode)
+# v_e_vals$I_eq_mad_cun <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_mad, parms, madden_cunniffe_vdynamic_ode)
+# 
+# # v_e_vals <- v_e_vals %>%
+# #   mutate(I_eq_mad = I_eq_mad / parms[["H"]],
+# #          I_eq_mad_cun = I_eq_mad_cun / parms[["H"]])
+# 
+# heatmap_don <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_don)) +
+#   geom_tile() +
+#   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+#                        name = "Equilibrium\ni value", 
+#                        na.value = "white",) +
+#   labs(title = "Donnelly")
+# 
+# heatmap_mad <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_mad)) +
+#   geom_tile() +
+#   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+#                        name = "Equilibrium\ni value", na.value = "white") +
+#   labs(title = "Madden")
+# 
+# heatmap_mad_cun <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_mad_cun)) +
+#   geom_tile() +
+#   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+#                        name = "Equilibrium\ni value", na.value = "white") +
+#   labs(title = "Madden_Cunniffe")
+# 
+# grid.arrange(heatmap_mad_cun, heatmap_mad, heatmap_don)
+
+
+#### NUMERICALLY SOLVE MODELS TO CREATE HEATMAPS
+madden_nleqslv_func <- function(states, parms) {
   
-  parms[["v"]] <- v_e_vals[1]
-  parms[["e"]] <- v_e_vals[2]
+  I <- states[1]
+  X <- states[2]
+  Z <- states[3]
   
-  if ("i" %in% names(init_states)) {
-    low_i <- 0.0001
-    high_i <- 0.9999
-  } else {
-    low_i <- 0.0001*parms[["H"]]
-    high_i <- 0.9999*parms[["H"]]
+  # PLANT EQUATIONS
+  S <- parms[["H"]] - I # number of susceptible plants
+  
+  become_infected <- parms[["phi"]] * parms[["b"]] * Z * S/(S + parms[["v"]]*I)
+  
+  natural_death_I <- parms[["c"]] * I
+  virus_induced_death <- parms[["d"]] * I
+  
+  # state equation
+  dI <- become_infected - natural_death_I - virus_induced_death
+  
+  # VECTOR EQUATIONS
+  A <- X + Z
+  
+  acquisition <- parms[["phi"]] * parms[["a"]] * (1 - parms[["e"]]*parms[["w_mad"]]) * X * parms[["v"]]*I /
+    (S + parms[["v"]]*I)
+  stop_being_infective <- parms[["tau"]] * Z
+  
+  birth <- parms[["lamda"]] * A * (1 - ((A/parms[["H"]])/parms[["K"]]))
+  death_X <- parms[["alpha"]] * X
+  death_Z <- parms[["alpha"]] * Z
+  
+  emigration_X <- parms[["phi"]] * parms[["p"]] * X
+  emigration_Z <- parms[["phi"]] * parms[["p"]] * Z
+  
+  # state equations
+  dX <- stop_being_infective - acquisition + birth - death_X - emigration_X
+  dZ <- acquisition - stop_being_infective - death_Z - emigration_Z
+  
+  
+  return(c(dI, dX, dZ))
+}
+
+madden_cunniffe_nleqslv_func <- function(states, parms) {
+  
+  I <- states[1]
+  X <- states[2]
+  Z <- states[3]
+  
+  S <- parms[["H"]] - I # number of susceptible plants
+  
+  # define variable phi
+  phi <- (S + I*parms[["v"]]) / (parms[["w_mad"]]*parms[["eta"]]*(S + I*parms[["v"]]*parms[["e"]]))
+  
+  # PLANT EQUATIONS
+  become_infected <- phi * parms[["b"]] * Z * S/(S + parms[["v"]]*I)
+  
+  natural_death_I <- parms[["c"]] * I
+  virus_induced_death <- parms[["d"]] * I
+  
+  # state equation
+  dI <- become_infected - natural_death_I - virus_induced_death
+  
+  # VECTOR EQUATIONS
+  A <- X + Z
+  
+  acquisition <- phi * parms[["a"]] * (1 - parms[["e"]]*parms[["w_mad"]]) * X * parms[["v"]]*I /
+    (S + parms[["v"]]*I)
+  stop_being_infective <- parms[["tau"]] * Z
+  
+  birth <- parms[["lamda"]] * A * (1 - ((A/parms[["H"]])/parms[["K"]]))
+  death_X <- parms[["alpha"]] * X
+  death_Z <- parms[["alpha"]] * Z
+  
+  emigration_X <- phi * parms[["p"]] * X
+  emigration_Z <- phi * parms[["p"]] * Z
+  
+  # state equations
+  dX <- stop_being_infective - acquisition + birth - death_X - emigration_X
+  dZ <- acquisition - stop_being_infective - death_Z - emigration_Z
+  
+  
+  return(c(dI, dX, dZ))
+}
+
+donnelly_full_nleqslv_func <- function(states, parms) {
+  
+  # STATES
+  i <- states[1]
+  As <- states[2]
+  Ai <- states[3]
+  
+  # PARAMETERS
+  gamma <- parms[["gamma"]]
+  alpha <- parms[["alpha"]]
+  theta <- parms[["theta"]]
+  lamda <- parms[["lamda"]]
+  K <- parms[["K"]]
+  H <- parms[["H"]]
+  p <- parms[["p"]]
+  v <- parms[["v"]]
+  e <- parms[["e"]]
+  w <- parms[["w_don"]]
+  Pacq <- parms[["Pacq"]]
+  Pinoc <- parms[["Pinoc"]]
+  
+  
+  # DEFINE PARAMETERS NEEDED FOR STATE EQUATIONS
+  
+  # q = prob of surviving flight between plants (i.e. doesn't emigrate/die)
+  q <- 1 - p  
+  
+  # i_hat = weighted frequency of infected plants, accounting for attraction towards infected plants
+  # i.e. adapted version of i / (1 - i + i) = i / 1, to include v
+  i_hat <- v*i / ((1-i) + v*i) 
+  
+  # expected number of transmissions per dispersal, 
+  # derived from analysis of markov chain (see Donnelly 2019, Appendix S1)
+  xi <- (q^2*Pacq*Pinoc*i_hat*(1 - e*w)*(1 - i_hat))/(p + q*w*(1 - i_hat*(1 - e)))
+  
+  # probability of settling on susceptible (Fs) and infected (Fi) plants,
+  # derived from analysis of Markov chain, see Donnelly et al. 2019, Appendix S4
+  Fs <- (1 - i_hat) / (1 - i_hat*(1 - e)) 
+  Fi <- e*i_hat / (1 - i_hat*(1 - e))
+  
+  # A = total number of aphids i.e. aphids per plant type * number of that plant type
+  # i.e. S*As + I*Ai where S is number of susceptible plants and I is number of infected plants
+  A <- As*(H - i*H) + Ai*(i*H)  
+  
+  
+  # STATE EQUATIONS
+  # aphids - change in per plant aphid density on susceptible (As)  and infected (Ai) plants
+  # = aphid births - aphid deaths - aphid settling on other plant type + aphids moving from other plant type
+  dAs <- lamda*As*(1 - As/K) - alpha*As - theta*As*(1 - Fs) + theta*Ai*Fs*i/(1 - i)
+  dAi <- lamda*Ai*(1 - Ai/K) - alpha*Ai - theta*Ai*(1 - Fi) + theta*As*Fi*(1 - i)/i
+  
+  # infected plants - change in incidence of infected plants
+  # = rate of aphid dispersal * mean number of transmissions - plant death
+  di <- (theta*A/H)*xi - gamma*i
+  
+  return(c(di, dAs, dAi))
+}
+
+
+find_i_eq_numeric <- function(starting_vals, nleqslv_func, parms) {
+
+  # find all equilibria
+  equilibria <- round(nleqslv::searchZeros(starting_vals, fn = nleqslv_func, parms = parms)$x, 4)
+
+  # subset to equilibria where i > 0 and vector numbers are >= 0
+  pos_equilibria <- matrix(equilibria[equilibria[,1]>0 & equilibria[,2] >= 0 & equilibria[,3] >= 0,], ncol = 3)
+
+  # return i equilibrium of this subset, or 0 if no positive equilibrium, or NA if multiple
+  if (length(pos_equilibria) == 0) {
+    return(0)
   }
-  
-  init_states[1] <- low_i
-  times <- seq(0, 10000, length.out = 2)
-  equilibrium_val_low_start <- round(data.frame(ode(y = init_states,
-                                     times = times,
-                                     func = func,
-                                     parms = parms))[length(times), 2], 5)
- 
-  init_states[1] <- high_i
-  equilibrium_val_high_start <-  round(data.frame(ode(y = init_states,
-                                                times = times,
-                                                func = func,
-                                                parms = parms))[length(times), 2], 5)
-  
-  if ("I" %in% names(init_states)) {
-    equilibrium_val_low_start <- equilibrium_val_low_start/parms[["H"]]
-    equilibrium_val_high_start <- equilibrium_val_high_start/parms[["H"]]
-  }
-  
-  if (equilibrium_val_low_start != equilibrium_val_high_start) {
+  else if (nrow(pos_equilibria) > 1) { # one row per set of eq values
+    print(pos_equilibria)
     return(NA)
   }
-  return(equilibrium_val_low_start)
+  return(pos_equilibria[,1]) # return only i equilibrium
+}
+
+numeric_eq_apply_func <- function(v_e_val_row, all_v_e_vals, 
+                                  nleqslv_funcs, starting_vals, parms,
+                                  model_num, num_models) {
+  
+  # find index of v and e columns
+  v_index <- which(names(all_v_e_vals) == "v")
+  e_index <- which(names(all_v_e_vals) == "e")
+  
+  print(paste0("Row ", which(all_v_e_vals$v == v_e_val_row[v_index] &
+                               all_v_e_vals$e == v_e_val_row[e_index]),
+               " of ", nrow(all_v_e_vals), ", model ", model_num, " of ", num_models))
+
+  parms[["v"]] <- v_e_val_row[v_index]
+  parms[["e"]] <- v_e_val_row[e_index]
+  
+  return(find_i_eq_numeric(starting_vals[[model_num]], nleqslv_funcs[[model_num]], parms))
+}
+
+create_v_e_heatmap <- function(v_vals, e_vals, model_names, nleqslv_funcs, starting_vals, parms) {
+  
+  ## takes in values of v and e, lists of information about the models being used and parameter values
+  ## to create the data for a v vs e heatmap with fill as equilibrium i values. model_names, nleqslv_funcs and
+  ## starting_vals must be the same length and with the models in the same order.
+  
+  # need to change e and v vals
+  v_e_vals <- expand.grid(v = v_vals, e = e_vals)
+  num_models <- length(model_names)
+  
+  # # create cluster with same number cores as computer to do operations in parallel
+  # cluster <- parallel::makeCluster(detectCores())
+  # #stop cluster on exit from function (even if there's an error)
+  # on.exit(parallel::stopCluster(cluster))
+  # 
+  # # export objects/functions from outside cluster into cluster
+  # clusterExport(cluster, c("find_i_eq_numeric", 
+  #                          "numeric_eq_apply_func"))
+
+  # find equilibrium value of i, for each row of v_e_vals (i.e. each value of v and e), for each model
+  equilibria_all_models <- 
+    #data.frame(parallel::parSapply(cluster, 
+    data.frame(sapply(                           
+      1:num_models,
+      function(n) {
+        print(paste0("Creating data for model ", n))
+        
+        #parallel::parApply(cluster,
+        apply(
+                           v_e_vals, 
+                           1, 
+                           FUN = numeric_eq_apply_func,
+                           all_v_e_vals = v_e_vals, 
+                           nleqslv_funcs = nleqslv_funcs,
+                           starting_vals = starting_vals,
+                           parms = parms,
+                           model_num = n,
+                           num_models = num_models)
+      }))
+
+  
+  browser()
+  # column bind equilibria_all_models to v_e_vals
+  col_names <- paste(model_names, "I_eq", sep = "_")
+  names(equilibria_all_models) <- col_names
+  v_e_vals <- cbind(v_e_vals, equilibria_all_models)
+
+  # for (i in 1:num_models) {
+  #   equilibria_all_models[[i]] <- lapply(equilibria_all_models[[i]], function(val) if (length(val) > 1) "NA" else val)
+  #   v_e_vals[, col_names[i]] <- unlist(equilibria_all_models[[i]])
+  # }
+  
+  # if any models are madden type models, divide equilibrium by H to get i rather than I
+  mad_models <- grep("mad", tolower(model_names))
+  mad_cols <- col_names[mad_models]
+  for (model in mad_cols) {
+    v_e_vals[, model] <- v_e_vals[, model] / parms[["H"]]
+  }
+  
+  return(v_e_vals)
+
 
 }
-v_vals <- seq(0.001, 5, length.out = 100)
-e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in madden e*w must be < 1
-v_e_vals <- expand.grid(v = v_vals, e = e_vals)
 
-v_e_vals$I_eq_don <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_don_full, parms, donnelly_full_vdynamic_ode)
-v_e_vals$I_eq_mad <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_mad, parms, madden_vdynamic_ode)
-v_e_vals$I_eq_mad_cun <- apply(X = v_e_vals, MARGIN = 1, FUN = find_i_equilibrium, init_states_mad, parms, madden_cunniffe_vdynamic_ode)
+### CREATE V E HEATMAPS
 
-# v_e_vals <- v_e_vals %>%
-#   mutate(I_eq_mad = I_eq_mad / parms[["H"]],
-#          I_eq_mad_cun = I_eq_mad_cun / parms[["H"]])
+# create random starting values for each state variable for don and madden models
+ntests <- 300
+starting_vals_don <- matrix(c(runif(n = ntests, min = 0, max = 1), # i starting vals
+                              runif(n = ntests, min = 0, max = parms[["K"]]), # As starting vals
+                              runif(n = ntests, min = 0, max = parms[["K"]])), #  Ai starting vals
+                            ncol = 3, byrow = F) 
+starting_vals_mad <- matrix(c(runif(n = ntests, min = 0, max = parms[["H"]]), # I starting vals
+                              runif(n = ntests, min = 0, max = parms[["K"]]*parms[["H"]]), # X starting vals
+                              runif(n = ntests, min = 0, max = parms[["K"]]*parms[["H"]])), # Z starting vals
+                            ncol = 3, byrow = F)
 
-heatmap_don <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_don)) +
+
+num_vals <- 60
+v_vals <- seq(0.001, 5, length.out = 5)
+e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 5) # in both models e*w must be < 1
+
+v_e_vals <- create_v_e_heatmap(v_vals = v_vals, 
+                               e_vals = e_vals, 
+                               model_names = list("Madden", "Madden_Cunniffe", "Donnelly"), 
+                               nleqslv_funcs = list(madden_nleqslv_func, madden_cunniffe_nleqslv_func, donnelly_full_nleqslv_func),
+                               starting_vals = list(starting_vals_mad, starting_vals_mad, starting_vals_don), 
+                               parms = parms)
+
+heatmap_don <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = Donnelly_I_eq)) +
   geom_tile() +
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
-                       name = "Equilibrium\ni value", 
-                       na.value = "white",) +
+                       name = "Equilibrium\ni value", na.value = "white") +
   labs(title = "Donnelly")
 
-heatmap_mad <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_mad)) +
+heatmap_mad <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = Madden_I_eq)) +
   geom_tile() +
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
                        name = "Equilibrium\ni value", na.value = "white") +
   labs(title = "Madden")
 
-heatmap_mad_cun <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = I_eq_mad_cun)) +
+heatmap_mad_cun <- ggplot(data = v_e_vals, aes(x = v, y = e, fill = Madden_Cunniffe_I_eq)) +
   geom_tile() +
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
                        name = "Equilibrium\ni value", na.value = "white") +
-  labs(title = "Madden_Cunniffe")
+  labs(title = "Madden Cunniffe")
 
-grid.arrange(heatmap_mad_cun, heatmap_mad, heatmap_don)
+grid.arrange(heatmap_don, heatmap_mad, heatmap_mad_cun)
 
+# pdf("results/heatmap_full_models.pdf")
+# grid.arrange(heatmap_don, heatmap_mad, heatmap_mad_cun)
+# dev.off()
+
+## INVESTIGATE WHY DON'T SEE BISTABILITY
+madden_cunniffe_vdynamic_no_EM_ode <- function(times, y, par) {
+  
+  S <- par[["H"]] - y[["I"]] # number of susceptible plants
+  
+  # define variable phi
+  phi <- (S + y[["I"]]*par[["v"]]) / (par[["w_mad"]]*par[["eta"]]*(S + y[["I"]]*par[["v"]]*par[["e"]]))
+  
+  # PLANT EQUATIONS
+  become_infected <- phi * par[["b"]] * y[["Z"]] * S/(S + par[["v"]]*y[["I"]])
+  
+  natural_death_I <- par[["c"]] * y[["I"]]
+  virus_induced_death <- par[["d"]] * y[["I"]]
+  
+  # state equation
+  dI <- become_infected - natural_death_I - virus_induced_death
+
+  # VECTOR EQUATIONS
+  A <- y[["X"]] + y[["Z"]]
+  #K <- (y[["X"]] + y[["Z"]]) / (par[["H"]] * (1 - par[["alpha"]] / par[["lamda"]]))
+  K <- par[["K"]]
+  
+  acquisition <- phi * par[["a"]] * (1 - par[["e"]]*par[["w_mad"]]) * y[["X"]] * par[["v"]]*y[["I"]] /
+    (S + par[["v"]]*y[["I"]])
+  stop_being_infective <- par[["tau"]] * y[["Z"]]
+  
+  birth <- par[["lamda"]] * A * (1 - ((A/par[["H"]])/K))
+  death_X <- par[["alpha"]] * y[["X"]]
+  death_Z <- par[["alpha"]] * y[["Z"]]
+  
+  # state equations
+  dX <- stop_being_infective - acquisition + birth - death_X
+  dZ <- acquisition - stop_being_infective - death_Z
+  
+  return(list(c(dI, dX, dZ)))
+}
+
+t <- data.frame(ode(y = init_states_mad,
+                    times = times,
+                    func = madden_cunniffe_vdynamic_no_EM_ode,
+                    parms = parms))
+
+t$I <- t$I/(parms[["H"]]) # make into a proportion
+
+t_long <- reshape2::melt(t, id.vars = "time")
+names(t_long) <- c("time", "compartment", "number")
+
+mad_cun_plant_trajec <- ggplot(data = t_long %>% filter(compartment == "I"),
+                               aes(x = time, y = number)) +
+  geom_line() +
+  ggtitle("Madden model (variable phi)") +
+  labs(y = "Proportion of infected plants", x = "Time (days)")
+
+
+mad_cun_vec_trajec <- ggplot(data = t_long %>% filter(!compartment == "I"),
+                             aes(x = time, y = number, col = compartment)) +
+  geom_line() +
+  labs(col = "Vector state", y = "Number of vectors", x = "Time (days)")
+
+grid.arrange(mad_cun_plant_trajec, mad_cun_vec_trajec) # can see that vector number stays constant
+
+
+#### RERUN HEATMAPS WITH NEW FUNCTION
+
+madden_cunniffe_no_EM_nleqslv_func <- function(states, parms) {
+  
+  I <- states[1]
+  X <- states[2]
+  Z <- states[3]
+  
+  S <- parms[["H"]] - I # number of susceptible plants
+  
+  # define variable phi
+  phi <- (S + I*parms[["v"]]) / (parms[["w_mad"]]*parms[["eta"]]*(S + I*parms[["v"]]*parms[["e"]]))
+  
+  # PLANT EQUATIONS
+  become_infected <- phi * parms[["b"]] * Z * S/(S + parms[["v"]]*I)
+  
+  natural_death_I <- parms[["c"]] * I
+  virus_induced_death <- parms[["d"]] * I
+  
+  # state equation
+  dI <- become_infected - natural_death_I - virus_induced_death
+  
+  # VECTOR EQUATIONS
+  A <- X + Z
+  #K <- (X + Z) / (parms[["H"]] * (1 - parms[["alpha"]] / parms[["lamda"]]))
+  K <- parms[["K"]]
+  
+  acquisition <- phi * parms[["a"]] * (1 - parms[["e"]]*parms[["w_mad"]]) * X * parms[["v"]]*I /
+    (S + parms[["v"]]*I)
+  stop_being_infective <- parms[["tau"]] * Z
+  
+  birth <- parms[["lamda"]] * A * (1 - ((A/parms[["H"]])/K))
+  death_X <- parms[["alpha"]] * X
+  death_Z <- parms[["alpha"]] * Z
+  
+  # state equations
+  dX <- stop_being_infective - acquisition + birth - death_X
+  dZ <- acquisition - stop_being_infective - death_Z
+  
+  return(c(dI, dX, dZ))
+}
+X_vals <- runif(n = ntests, min = 0, max = parms[["K"]]*parms[["H"]])
+Z_vals <- parms[["K"]]*parms[["H"]] - X_vals
+starting_vals_mad_new <- matrix(c(runif(n = ntests, min = 0, max = parms[["H"]]), # I starting vals
+                              X_vals, # X starting vals
+                              Z_vals),# Z starting vals
+                            ncol = 3, byrow = F)
+
+v_e_vals_no_EM <- create_v_e_heatmap(v_vals = v_vals, 
+                                     e_vals = e_vals, 
+                                     model_names = list("Madden_Cunniffe"), 
+                                     nleqslv_funcs = list(madden_cunniffe_no_EM_nleqslv_func),
+                                     starting_vals = list(starting_vals_mad), 
+                                     parms = parms)
+heatmap_mad_cun <- ggplot(data = v_e_vals_no_EM, aes(x = v, y = e, fill = Madden_Cunniffe_I_eq)) +
+  geom_tile() +
+  scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+                       name = "Equilibrium\ni value", na.value = "white") +
+  labs(title = "Madden Cunniffe")
+heatmap_mad_cun
+
+## plot example trajectories
+
+plot_multiple_trajec_mad <- function(init_states, times, parms, func) {
+  
+  ## funtion that plots trajectories for multiple initial starting states for maddden type models.
+  ## init_states must be a matrix of starting values where 1 row is one run.
+  
+  for (row in 1:nrow(init_states)) {
+    trajec <- data.frame(ode(y = c(I = init_states[row,1], 
+                                   X = init_states[row,2], 
+                                   Z = init_states[row,3]),
+                             times = times,
+                             parms = parms,
+                             func = func))
+    trajec$I <- trajec$I/parms[["H"]] # make into proportion
+    
+    # plot trajectory of infected plants and number of aphids
+    if (row == 1) {
+      trajec_plot <- ggplot(data = trajec, aes(x = time, y = I)) +
+        geom_line() +
+        labs(x = "Time (days)",
+             y = "Proportion of infected plants")
+      
+      vector_plot <- ggplot(data = trajec, aes(x = time, y = X)) +
+        geom_line() +
+        geom_line(aes(x = time, y = Z), colour = "red") +
+        labs(x = "Time (days)",
+             y = "Number of vectors")
+    } else {
+      trajec_plot <- trajec_plot +
+        geom_line(data = trajec, aes(x = time, y = I))
+      
+      vector_plot <- vector_plot +
+        geom_line(data = trajec, aes(x = time, y = X)) +
+        geom_line(data = trajec, aes(x = time, y = Z), colour = "red")
+    }
+    
+  }
+  return(arrangeGrob(trajec_plot, vector_plot))
+}
+
+starting_vals_mad_new_S <- starting_vals_mad_new[c(T,F,F),]
+times_new <- seq(0, 5, by = 0.01)
+
+parms_new <- parms
+parms_new[["v"]] <- 0.001
+parms_new[["e"]] <- 0.001
+
+mad_cun_trajecs_plot_no_EM <- plot_multiple_trajec_mad(starting_vals_mad_new_S, 
+                                                       times_new, 
+                                                       parms_new, 
+                                                       madden_cunniffe_vdynamic_no_EM_ode)
+
+grid.arrange(mad_cun_trajecs_plot_no_EM)
+
+parms_new[["p"]] <- 0.01 # with very small p (chance of emigration), we see bistability in full model
+mad_cun_trajecs_plot <- plot_multiple_trajec_mad(starting_vals_mad_new_S, 
+                                                       times_new, 
+                                                       parms_new, 
+                                                       madden_cunniffe_vdynamic_ode)
+grid.arrange(mad_cun_trajecs_plot)
+
+parms_new[["p"]] <- 0.2
+
+# change init values so vectors always start uninfective
+X_vals_fixed <- rep(1200, ntests/3)
+Z_vals_fixed <- rep(0, ntests/3)
+starting_vals_mad_fixed <- matrix(c(runif(n = ntests/3, min = 0, max = parms[["H"]]), # I starting vals
+                                    X_vals_fixed, # X starting vals
+                                    Z_vals_fixed),# Z starting vals
+                                  ncol = 3, byrow = F)
+
+mad_cun_trajecs_plot_fixed_v <- plot_multiple_trajec_mad(starting_vals_mad_fixed, 
+                                                         times_new, 
+                                                         parms_new, 
+                                                         madden_cunniffe_vdynamic_ode)
+grid.arrange(mad_cun_trajecs_plot_fixed_v)
+
+# try with low value of p
+parms_new[["p"]] <- 0.001
+mad_cun_trajecs_plot_fixed_v_low_p <- plot_multiple_trajec_mad(starting_vals_mad_fixed, 
+                                                         times_new, 
+                                                         parms_new, 
+                                                         madden_cunniffe_vdynamic_ode)
+grid.arrange(mad_cun_trajecs_plot_fixed_v_low_p) # no bistability
+
+mad_cun_trajecs_plot_no_EM_fixed_v <- plot_multiple_trajec_mad(starting_vals_mad_fixed, 
+                                                       times_new, 
+                                                       parms_new, 
+                                                       madden_cunniffe_vdynamic_no_EM_ode)
+
+grid.arrange(mad_cun_trajecs_plot_no_EM_fixed_v) # no bistability even with no emigration

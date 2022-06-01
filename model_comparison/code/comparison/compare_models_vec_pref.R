@@ -103,7 +103,7 @@ parms <- c(
   
   ## MADDEN PARMS
   # k1 = 1/0.021, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
-  # lamda = 1/0.021, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
+  # lambda = 1/0.021, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
   # T = 0.2, # time feeding/probing per plant visit (set to 0.5/phi in Madden model)
   tau = 4, # rate of moving through infectious state in vector
   w_mad = 0.2, # feeding probability on healthy plant
@@ -163,8 +163,10 @@ init_states_mad <- c(
 
 
 ### RUN DONNELLY EPIDEMIC
+times_short <- seq(0, 20, by = 0.2)
+
 trajectory_don <- data.frame(ode(y = init_states_don,
-                             times = times,
+                             times = times_short,
                              parms = parms,
                              func = donnelly_vpref_ode))
 trajectory_don$I <- trajectory_don$I/parms[["H"]] # make proportion
@@ -173,11 +175,11 @@ trajectory_don$I <- trajectory_don$I/parms[["H"]] # make proportion
 plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
   geom_line() +
   labs(x = "Time (days)",
-       y = "Number of infected plants, I")
+       y = "Proportion of infected plants, i")
 
 ### RUN MADDEN EPIDEMIC
 trajectory_mad <- data.frame(ode(y = init_states_mad,
-                      times = times,
+                      times = times_short,
                       func = madden_vpref_ode,
                       parms = parms))
 trajectory_mad$I <- trajectory_mad$I/parms[["H"]] # make proportion
@@ -190,7 +192,8 @@ names(trajectory_mad_long) <- c("time", "compartment", "number")
 plant_trajec <- plant_trajec +
   geom_line(data = trajectory_mad_long %>% filter(compartment == "I"),
             aes(x = time, y = number), color = "red") +
-  annotate("text", label = "red = Madden\nblack = Donnelly", x = times[length(times)/3*2], y = 0)
+  annotate("text", label = "——— Madden", x = times_short[length(times_short)/3*2.5], y = 0, colour = "red") +
+  annotate("text", label = "——— Donnelly", x = times_short[length(times_short)/3*2.5], y = 0.02, colour = "black")
 plant_trajec
 
 
@@ -368,7 +371,7 @@ title <- textbox_grob("Model comparison with vector preference - constant vector
                       padding = unit(c(0, 1, 0, 1), "cm"))
 
 # create pdf file to print plot to
-pdf(file = "sens_analysis_vec_pref_models.pdf", width = 9, height = 12)
+pdf(file = "results/sens_analysis_vec_pref_models.pdf", width = 9, height = 12)
 all_plots <- gridExtra::grid.arrange(don_plots,
                                      mad_plots,
                                      title,
@@ -377,6 +380,7 @@ all_plots <- gridExtra::grid.arrange(don_plots,
                                      widths = c(2,2,1))
 all_plots
 dev.off()
+
 
 ##### FIND APPROPRIATE VALUES FOR THETA AND PHI BASED ON THE OTHER VALUES SO FINAL I IS 0.5
 find_theta_phi_vals <- function(theta_phi_data, init_states_don, init_states_mad, times, parms) {
@@ -461,6 +465,46 @@ out <- find_theta_phi_vals(theta_phi_data,
 parms[["phi"]] <- out[["phi_threshold"]]
 parms[["theta"]] <- out[["theta_threshold"]]
 
+### PLOT JUST VECTOR PREFERENCE PARMS - V AND E
+analysis_parms_don_v_e <- list(v = seq(0, 20, length.out = num_parm_runs*2+20),
+                           e = seq(0, 20, length.out = num_parm_runs*2+20))
+
+analysis_parms_mad_v_e <- list(v = seq(0, 20, length.out = num_parm_runs*2+20),
+                           e = seq(0, 20, length.out = num_parm_runs*2+20))
+
+
+v_e_sens_anal_data <- sensitivity_analysis(parms_mad = analysis_parms_mad_v_e,
+                                          parms_don = analysis_parms_don_v_e,
+                                          init_states_don, 
+                                          init_states_mad, 
+                                          times, 
+                                          parms)
+
+v_e_sens_anal_data <- v_e_sens_anal_data %>%
+  mutate(parm_name = recode_factor(parm_name,
+                                   "v" = "'Infected plant attractiveness (v)'",
+                                   "e" = "'Infected plant acceptability ('*epsilon*')'"))
+
+pdf("results/v_e_sens_analysis_plot.pdf", height = 6, width = 9)
+v_e_sens_anal_plot <- ggplot(data = v_e_sens_anal_data, aes(x = parm_val, y = final_I, colour = model)) +
+  facet_wrap(~parm_name, label = "label_parsed", strip.position = "bottom") +
+  geom_line() +
+  theme_bw() +
+  theme(text = element_text(size = 15),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        strip.text = element_text(face = "bold"),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 13),
+        axis.title.x = element_blank()) +
+  scale_colour_manual(values = c("blue", "red")) +
+  labs(y = "Final disease incidence") +
+  ylim(c(0,320))
+v_e_sens_anal_plot
+dev.off()
+
+
 ##### CREATE HEATMAPS OF V VS E for final incidence of disease
 
 find_I_equilibrium <- function(parms, model, mult_eq_return_NA=T) {
@@ -500,7 +544,9 @@ find_I_equilibrium <- function(parms, model, mult_eq_return_NA=T) {
     coeff_0 <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w)*A*v
     coeff_1 <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w)*v*H) + phi^2*b*a*(1 - e*w)*A*v
     coeff_2 <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w)*v + phi*a*(1 - e*w)*v^2)
-  }
+  
+    #j11 <- -theta*b*
+    }
   else if (model == "Madden_Cunniffe") {
     c <- parms[["c"]]
     d <- parms[["d"]]
@@ -523,29 +569,123 @@ find_I_equilibrium <- function(parms, model, mult_eq_return_NA=T) {
   }
 
   # solve for I using coefficients to get all equilibrimus
-  equilibriums <- polyroot(c(coeff_0, coeff_1, coeff_2))
+  I_equilibriums <- polyroot(c(coeff_0, coeff_1, coeff_2))
   
   # subset to those that have no imaginary part, then remove imaginary part (as it is 0)
-  equilibriums <- equilibriums[Im(zapsmall(equilibriums)) == 0]
-  equilibriums <- Re(equilibriums)
+  I_equilibriums <- I_equilibriums[Im(zapsmall(I_equilibriums)) == 0]
+  I_equilibriums <- Re(I_equilibriums)
   
   # subset to biologically possible equilibrium i.e. I > 0, I <= H (number host plants)
-  equilibriums <- equilibriums[equilibriums > 0 & equilibriums <= parms[["H"]]]
+  I_equilibriums <- I_equilibriums[I_equilibriums > 0 & I_equilibriums <= parms[["H"]]]
   
-  if (length(equilibriums) == 0) { # there is no stable positive equilibrium for I
-    return(0)
-  } 
-  else if (length(equilibriums) > 1) {
-      if (mult_eq_return_NA == T) { # if input has mult_eq_return_NA = T, return NA
-        return(NA)
+  # add the equilibrium at I = 0 (polyroot coefficients only found values of 2 real roots (if they exist))
+  #I_equilibriums <- c(I_equilibriums, 0)
+  
+
+  if(model == "Madden") {
+    # find out if R0 < 1 to find out if I=0 equilibrium is stable
+     if((phi^2*a*b*v*A*(1 - e*w)) / (tau*(c + d)*H) < 1) {
+       zero_stable <- T
+     }
+    else { zero_stable <- F }
+    
+    # if no positive I equilibriums return 0
+    if(length(I_equilibriums) == 0) {
+      if(zero_stable == F) {
+        stop("no real roots and zero equilibrium isn't stable?")
       }
+      return(0)
+    }
+    
+    # calculate the Z equilibrium for each I equilibrim (Z when dZ/dt = 0)
+    Z_equilibriums <- phi*a*(1 - e*w)*v*I_equilibriums*A / 
+      (tau*(H - I_equilibriums + v*I_equilibriums) + phi*a*(1 - e*w)*v*I_equilibriums)
+    
+    # calculate jacobian coefficients
+    j11 <- -phi*b*Z_equilibriums / (H - I_equilibriums + v*I_equilibriums) -
+      phi*b*Z_equilibriums*(H - I_equilibriums)*(v - 1) / (H - I_equilibriums + v*I_equilibriums)^2 -
+      (c + d)
+    j12 <- phi*b*(H - I_equilibriums) / (H - I_equilibriums + v*I_equilibriums)
+    j21 <- phi*a*(1 - e*w)*(A - Z_equilibriums)*v / (H - I_equilibriums + v*I_equilibriums) - 
+      phi*a*(1 - e*w)*(A - Z_equilibriums)*v*I_equilibriums*(v - 1) / (H - I_equilibriums + v*I_equilibriums)^2
+    j22 <- -phi*a*(1 - e*w)*v*I_equilibriums / (H - I_equilibriums + v*I_equilibriums) - tau 
+    
+    # for each equilibrium, create jacobian to assess its stability
+    stable_eqs <- zero_stable
+    
+    for (i in 1:length(I_equilibriums)) {
+      J <- matrix(c(j11[i], j12[i], j21[i], j22[i]), nrow = 2, byrow = T)
+
+      eigenvals <- Re(eigen(J)$values)
+      
+      if(max(eigenvals) < 0) { # if all eigenvals are <0, stable
+        stable_eqs <- stable_eqs + 1
+      }
+    }
+    if (stable_eqs == 1) {
+      if(zero_stable == T) {
+        return(0)
+      }
+      return(I_equilibriums/H) # return as a proportion of infected plants
+    }
+    else if (mult_eq_return_NA == T) { # if input has mult_eq_return_NA = T, return NA
+      return(c(NA))
+    }
+    return(I_equilibriums/H) # return as a proportion of infected plants
   }
   
-  # turn equilibrium into proportion of infected plants, i
-  equilibriums <- equilibriums / parms[["H"]]
-  
-  return(equilibriums)
+  if (model == "Donnelly") {
+    
+    # find out if R0 < 1 to find out if I=0 equilibrium is stable
+    if (Pacq*Pinoc*theta*(A/H)*(v*(1 - e*w)/w)*(1/gamma) < 1) {
+      zero_stable <- T
+    }
+    else { zero_stable <- F }
+    
+    # if no positive I equilibriums return 0
+    if(length(I_equilibriums) == 0) {
+      if(zero_stable == F) {
+        stop("no real roots and zero equilibrium isn't stable?")
+      }
+      return(0)
+    }
+    
+    # determine stability by calculating the value of the second deriv wrt I at I equilibrium(s)
+    fI <- theta*A*Pacq*Pinoc*v*I_equilibriums*(1 - e*w)*(H - I_equilibriums)
+    f_dash_I <- theta*A*Pacq*Pinoc*v*(1 - e*w)*(H - 2*I_equilibriums)
+    gI <- w*(H - I_equilibriums + v*I_equilibriums)^2 - w*(1 - e)*v*I_equilibriums*
+      (H - I_equilibriums + v*I_equilibriums)
+    g_dash_I <- 2*(v - 1)*w*(H - I_equilibriums + v*I_equilibriums) - (w*(1 - e)*v*(I_equilibriums*(v - 1) + 
+                                                                       H - I_equilibriums + v*I_equilibriums))
+    
+    second_derivs <- (f_dash_I*gI - g_dash_I*fI) / gI^2  - gamma# quotient rule
+    stable_eqs <- zero_stable + length(second_derivs[second_derivs < 0])
 
+    if (stable_eqs == 1) {
+      if(zero_stable == T) {
+        return(0)
+      }
+      return(I_equilibriums/H) # return as a proportion of infected plants
+    }
+    else if (stable_eqs > 1 & mult_eq_return_NA == T) { # if input has mult_eq_return_NA = T, return NA
+      return(c(NA))
+    }
+    else if (stable_eqs == 0) { # something is wrong - debug
+      print(I_equilibriums)
+      print(second_derivs)
+      browser()
+    }
+    return(I_equilibriums/H) # return as a proportion of infected plants                                                                     
+  }
+  
+  #otherwise if madden-cunniffe
+  if(length(I_equilibriums) == 0) {
+    return(0)
+  }
+  else if (length(I_equilibriums) > 1) {
+    return(NA)
+  }
+  return(I_equilibriums/H)
 }
 
 equilibrium_apply_func <- function(e_v_vals, parms, col_names, model) {
@@ -558,7 +698,7 @@ equilibrium_apply_func <- function(e_v_vals, parms, col_names, model) {
   parms[[ col_names[2] ]] <- e_v_vals[2]
   
   equilibrium <- find_I_equilibrium(parms, model)
-  
+
   return(equilibrium)
 }
 
@@ -579,6 +719,7 @@ create_heatmap_data <- function(e_vals, v_vals, models, parms) {
                                               parms = parms, 
                                               col_names = names(v_e_df), 
                                               model = model))
+
   col_names <- paste0(models, "_I_eq")
   
   for (i in 1:length(col_names)) {
@@ -594,14 +735,17 @@ create_heatmap_data <- function(e_vals, v_vals, models, parms) {
 
 # define e and v vals across which the equilibrium of I will be found
 v_vals <- seq(0.001, 5, length.out = 100)
-e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in madden e*w must be < 1
+e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in both models e*w must be < 1
 
 # create heatmap data
+v_valss <- seq(0.001, 5, length.out = 3)
+e_valss <- seq(0.001, 5, length.out = 3)
 v_e_df <- create_heatmap_data(e_vals, v_vals, models = c("Donnelly", "Madden"), parms)
 
 heatmap_don <- ggplot(data = v_e_df, aes(x = v, y = e, fill = Donnelly_I_eq)) +
   geom_tile() +
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+                       limits = c(0,1),
                       name = "Equilibrium\ni value", na.value = "white") +
   labs(title = "Donnelly")
 
@@ -609,10 +753,11 @@ heatmap_don <- ggplot(data = v_e_df, aes(x = v, y = e, fill = Donnelly_I_eq)) +
 heatmap_mad <- ggplot(data = v_e_df, aes(x = v, y = e, fill = Madden_I_eq)) +
   geom_tile() +
   scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
+                       limits = c(0,1),
                        name = "Equilibrium\ni value", na.value = "white") +
   labs(title = "Madden")
 
-pdf("heatmaps_v_e_final_I.pdf")
+pdf("results/heatmaps_v_e_final_I.pdf")
 grid.arrange(heatmap_don, heatmap_mad)
 dev.off()
 
@@ -658,16 +803,9 @@ coeff_0_don <- theta*A*v*(1 - e*w_don)*H*Pacq*Pinoc - gamma*w_don*H^2
 coeff_1_don <- gamma*w_don*v*(1 - e)*H + 2*gamma*w_don*H - 2*gamma*w_don*v*H - theta*A*v*(1 - e*w_don)*Pacq*Pinoc
 coeff_2_don <- gamma*w_don*(v^2*(1 - e) - v*(1 - e) - v^2 + 2*v - 1)
 
-coeff_0_mad <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w_mad)*A*v
-coeff_1_mad <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w_mad)*v*H) + phi^2*b*a*(1 - e*w_mad)*A*v
-coeff_2_mad <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w_mad)*v + phi*a*(1 - e*w_mad)*v^2)
-
 I <- seq(0, 600, length.out = 200)
 polynom_don <- coeff_0_don + coeff_1_don*I + coeff_2_don*I^2
-polynom_mad <- coeff_0_mad + coeff_1_mad*I + coeff_2_mad*I^2
 plot(x = I, y = polynom_don, type = "l")
-abline(h = 0)
-plot(x = I, y = polynom_mad, type = "l")
 abline(h = 0)
 
 
@@ -693,8 +831,8 @@ v_e_vals <- expand.grid(V = v_vals, E = e_vals)
 
 # Calculate R0 for each combination of v and e values
 R0_df <- v_e_vals %>%
-  dplyr::mutate(R0 = parms[["theta"]]*(parms[["A"]]/parms[["H"]]) * (V*(1 - E*parms[["w_don"]])/parms[["w_don"]]) *
-                  (1/parms[["gamma"]]))
+  dplyr::mutate(R0 = parms[["Pacq"]]*parms[["Pinoc"]]*parms[["theta"]] * (parms[["A"]]/parms[["H"]]) * 
+                  (V*(1 - E*parms[["w_don"]])/parms[["w_don"]]) * (1/parms[["gamma"]]))
 
 # plot heatmap
 R0_heatmap_don <- ggplot(data = R0_df, aes(x = V, y = E, fill = R0)) +
@@ -702,38 +840,169 @@ R0_heatmap_don <- ggplot(data = R0_df, aes(x = V, y = E, fill = R0)) +
   scale_fill_gradient2(low = "navyblue", mid = "white", high = "firebrick4", midpoint = 1,
                        name = "R0 value", na.value = "black") +
   labs(title = "Donnelly")
+ 
+R0_threshold_vals <- R0_df %>%
+  round(2) %>%
+  filter(R0 > 0.98 & R0 < 1.02) 
+
+R0_heatmap_don <- R0_heatmap_don +
+  geom_line(data = R0_threshold_vals, aes(x = V, y = E)) +
+  annotate("text", label = "——   R0 = 1", x = 0.58, y = 4.9) +
+  labs(x = "v", y = expression(epsilon))
 R0_heatmap_don # R0<1 in area with multiple positive equilibriums. As one of these is stable, this shows bistability
+
+pdf("results/R0_heatmap_don.pdf")
+R0_heatmap_don 
+dev.off()
+
+heatmap_don_R0_line <- heatmap_don + 
+  geom_line(data = R0_threshold_vals, aes(x = V, y = E, fill = NULL), size=1.5) +
+  labs(y = expression(epsilon),
+       title = "a) Donnelly")
+heatmap_don_R0_line
 
 ### plot trajectories to show example of bistability
 parms_new <- parms
 parms_new[["v"]] <- 0.3
 parms_new[["e"]] <- 0.2
 
-all_init_states <- seq(1, 0.8*parms[["H"]], length.out = 100)
+all_init_states_don <- seq(1, 0.8*parms[["H"]], length.out = 100)
 
-for (state in all_init_states) {
+for (state in all_init_states_don) {
   trajec <- data.frame(ode(y = c(I = state),
                            times = seq(0, 15, by = 0.2),
                            parms = parms_new,
                            func = donnelly_vpref_ode))
   trajec$I <- trajec$I/parms[["H"]] # make proportion
   
-  # plot trajectory of infected plants and number of aphids
-  if (state == all_init_states[1]) {
-    trajec_plot <- ggplot(data = trajec, aes(x = time, y = I)) +
+  # plot trajectory of infected plants
+  if (state == all_init_states_don[1]) {
+    trajec_plot_don <- ggplot(data = trajec, aes(x = time, y = I)) +
       geom_line() +
-      labs(x = "Time (days)",
+      labs(x = "Time (arbitrary units)",
            y = "Proportion of infected plants")
   } else {
-    trajec_plot <- trajec_plot +
+    trajec_plot_don <- trajec_plot_don +
       geom_line(data = trajec, aes(x = time, y = I))
   }
 
 }
-trajec_plot <- trajec_plot +
-  annotate("text", label = paste("v =", parms_new[["v"]], ", e =", parms_new[["e"]]), 
-           x = 12, y = 0.1)
-trajec_plot
+trajec_plot_don <- trajec_plot_don +
+  theme_bw() +
+  theme(text = element_text(size = 15)) +
+  ylim(c(0,1))
+
+pdf("results/bistability_trajecs_don.pdf")
+trajec_plot_don
+dev.off()
+
+### INVESTIGATE BISTABILITY MADDEN
+bistable_row <- v_e_df[which(is.na(v_e_df$Madden_I_eq)),] # one point that's bistable
+v <- bistable_row[1, "v"]
+e <- bistable_row[1, "e"]
+
+coeff_0_mad <- (c + d)*tau*H^2 - phi^2*b*H*a*(1 - e*w_mad)*A*v
+coeff_1_mad <- (c + d)*(2*tau*H*v - 2*tau*H + phi*a*(1 - e*w_mad)*v*H) + phi^2*b*a*(1 - e*w_mad)*A*v
+coeff_2_mad <- (c + d)*(tau + tau*v^2 - 2*tau*v - phi*a*(1 - e*w_mad)*v + phi*a*(1 - e*w_mad)*v^2)
+
+equilibriums <- polyroot(c(coeff_0_mad, coeff_1_mad, coeff_2_mad))
+equilibriums <- equilibriums[Im(zapsmall(equilibriums)) == 0]
+equilibriums <- Re(equilibriums)
+equilibriums <- equilibriums[equilibriums > 0 & equilibriums <= parms[["H"]]]
+equilibriums # 39.75626 101.17601
+
+I <- seq(0, 600, length.out = 200)
+polynom_mad <- coeff_0_mad + coeff_1_mad*I + coeff_2_mad*I^2
+plot(x = I, y = polynom_mad, type = "l")
+abline(h = 0)
+
+## find R0 and plot on heatmap
+R0_df_mad <- v_e_vals %>%
+  dplyr::mutate(R0 = (parms[["phi"]]^2*parms[["a"]]*parms[["b"]]*V*parms[["A"]]*(1 - E*parms[["w_mad"]])) /
+                        (parms[["tau"]]*(parms[["c"]] + parms[["d"]])*parms[["H"]]))
+
+R0_threshold_vals_mad <- R0_df_mad %>%
+  round(2) %>%
+  filter(R0 > 0.98 & R0 < 1.02) 
+
+# add R0 line to v e heatmap
+heatmap_mad_R0_line <- heatmap_mad + 
+  geom_line(data = R0_threshold_vals_mad, aes(x = V, y = E, fill = NULL), size = 1.5) +
+  labs(y = expression(epsilon))
+heatmap_mad_R0_line
+
+pdf("results/heatmaps_R0_line.pdf")
+grid.arrange(heatmap_mad_R0_line, heatmap_don_R0_line)
+dev.off()
+
+## calculate R0 at bistable point
+R0 <- (parms[["phi"]]^2*parms[["a"]]*parms[["b"]]*v*parms[["A"]]*(1 - e*parms[["w_mad"]])) /
+  (parms[["tau"]]*(parms[["c"]] + parms[["d"]])*parms[["H"]])
+# = 0.993 so R0<1, I=0 is stable, hence a true bistable result
+
+
+## plot bistable trajectories at different I init values
+parms_bistab <- parms
+parms_bistab[["v"]] <- bistable_row[1, "v"]
+parms_bistab[["e"]] <- bistable_row[1, "e"]
+
+all_init_states_mad <- seq(1, 0.8*parms[["H"]], length.out = 30)
+
+for (state in all_init_states_mad) {
+  trajec <- data.frame(ode(y = c(I = state, Z = 0),
+                           times = seq(0, 1, by = 0.05),
+                           parms = parms_bistab,
+                           func = madden_vpref_ode))
+  trajec$I <- trajec$I/parms[["H"]] # make proportion
+  
+  # plot trajectory of infected plants
+  if (state == all_init_states_mad[1]) {
+    trajec_plot_mad <- ggplot(data = trajec, aes(x = time, y = I)) +
+      geom_line() +
+      labs(x = "Time (days)",
+           y = "Proportion of infected plants")
+  } else {
+    trajec_plot_mad <- trajec_plot_mad +
+      geom_line(data = trajec, aes(x = time, y = I))
+  }
+  
+}
+trajec_plot_mad <- trajec_plot_mad +
+  # annotate("text", label = paste("v =", round(parms_bistab[["v"]],3),
+  #                                ", e =", round(parms_bistab[["e"]], 3)), 
+  #          x = 12, y = 0.7) +
+  labs(title = "b) Madden")
+#pdf("results/bistability_trajecs_don.pdf")
+#grid.arrange(trajec_plot_don, trajec_plot_mad)
+#dev.off()
+
+
+
+trajec_low <- data.frame(ode(y = init_states_mad,
+                                 times = 1:60,
+                                 func = madden_vpref_ode,
+                                 parms = parms_bistab))
+trajec_low$I <- trajec_low$I/parms[["H"]] # make proportion
+
+trajec_low_long <- reshape2::melt(trajec_low, id.vars = "time")
+names(trajec_low_long) <- c("time", "compartment", "number")
+
+trajec_high <- data.frame(ode(y = c(I = 0.99*parms[["H"]], Z = 0),
+                             times = 1:60,
+                             func = madden_vpref_ode,
+                             parms = parms_bistab))
+trajec_high$I <- trajec_high$I/parms[["H"]] # make proportion
+
+
+trajec_high_long <- reshape2::melt(trajec_high, id.vars = "time")
+names(trajec_high_long) <- c("time", "compartment", "number")
+
+# plot trajectory of infected plants and vector compartments
+bistab_trajec <- ggplot(data = trajec_low_long %>% filter(compartment == "I"),
+                        aes(x = time, y = number)) +
+  geom_line() +
+  geom_line(data = trajec_high_long %>% filter(compartment == "I"))
+bistab_trajec
 
 
 #### INVESTIGATE RELATIONSHIP BETWEEN W_DON AND W_MAD
@@ -837,7 +1106,7 @@ mult_sens_analysis_w_epsilon <- multiple_sensitivity_analysis(parms_mad = w_mad_
 grid.arrange(mult_sens_analysis_w_epsilon[[2]])
 
 
-pdf("mult_sens_anal_wmad_wdon.pdf")
+pdf("results/mult_sens_anal_wmad_wdon.pdf")
 grid.arrange(mult_sens_analysis_w_epsilon[[2]])
 dev.off()
 
@@ -892,7 +1161,7 @@ new_plant_trajec <- ggplot(data = trajectory_don, aes(x = time, y = I)) +
   labs(x = "Time (days)",
        y = "Number of infected plants, I")
 
-### RUN MADDEN EPIDEMIC
+### RUN MADDEN  CUNNIFFE EPIDEMIC
 trajectory_mad <- data.frame(ode(y = init_states_mad,
                                  times = times,
                                  func = madden_cunniffe_vpref_ode,
@@ -903,7 +1172,7 @@ trajectory_mad$I <- trajectory_mad$I/parms[["H"]] # make proportion
 trajectory_mad_long <- reshape2::melt(trajectory_mad, id.vars = "time")
 names(trajectory_mad_long) <- c("time", "compartment", "number")
 
-# plot trajectory of infected plants and vector compartments
+# plot trajectory of infected plant compartment
 new_plant_trajec <- new_plant_trajec +
   geom_line(data = trajectory_mad_long %>% filter(compartment == "I"),
             aes(x = time, y = number), color = "red") +
@@ -919,29 +1188,155 @@ e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # e*w must be < 1 for
 # create heatmap data
 v_e_df2 <- create_heatmap_data(e_vals, v_vals, models = c("Donnelly", "Madden", "Madden_Cunniffe"), parms)
 
+# create scale
+
 heatmap_don_new <- ggplot(data = v_e_df2, aes(x = v, y = e, fill = Donnelly_I_eq)) +
   geom_tile() +
-  scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
-                       name = "Equilibrium\ni value", na.value = "white") +
-  labs(title = "Donnelly")
+  scale_fill_gradientn(colours = c("lightgrey", "red", "blue"), values = rescale(c(0, 0.00001, 1)),
+                       limits = c(0,1),
+                       name = "Equilibrium\ni value", na.value = "yellow") +
+  labs(title = "a) Donnelly", y = expression(epsilon))
 
 
 heatmap_mad_new <- ggplot(data = v_e_df2, aes(x = v, y = e, fill = Madden_I_eq)) +
   geom_tile() +
-  scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
-                       name = "Equilibrium\ni value", na.value = "white") +
-  labs(title = "Madden")
+  scale_fill_gradientn(colours = c("lightgrey", "red", "blue"), values = rescale(c(0, 0.00001, 1)),
+                       limits = c(0,1),
+                       name = "Equilibrium\ni value", na.value = "yellow") +
+  labs(title = "b) Madden", y = expression(epsilon))
 
 heatmap_mad_cun <- ggplot(data = v_e_df2, aes(x = v, y = e, fill = Madden_Cunniffe_I_eq)) +
   geom_tile() +
-  scale_fill_gradientn(colours = c("darkred", "red", "blue"), values = c(0, 0.00001, 1),
-                       name = "Equilibrium\ni value", na.value = "white") +
-  labs(title = "Madden (variable phi)")
+  scale_fill_gradientn(colours = c("lightgrey", "red", "blue"), values = rescale(c(0, 0.00001, 1)),
+                       limits = c(0,1),
+                       name = "Equilibrium\ni value", na.value = "yellow") +
+  labs(title = "c) Madden-Cunniffe", y = expression(epsilon))
 
-grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
+#grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
 
 
-pdf("heatmaps_3_models.pdf", width = 7, height = 10)
+pdf("results/heatmaps_3_models.pdf", width = 7, height = 10)
 grid.arrange(heatmap_don_new, heatmap_mad_new, heatmap_mad_cun)
 dev.off()
+
+# FORMAT HEATMAPS FOR REPORT FIGURE
+heatmap_for_legend <- heatmap_mad_cun + 
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 12))
+
+get_legend <- function(a.gplot){ # function to get legend from plot
+  tmp <- ggplot_gtable(ggplot_build(a.gplot)) 
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box") 
+  legend <- tmp$grobs[[leg]] 
+  legend
+} 
+heatmap_legend <- get_legend(heatmap_for_legend) # extract colour bar legend
+
+# create legend for NA and 0 values
+heatmap_zero_legend <- heatmap_mad_cun +
+  geom_tile(aes(x = v, y = e, colour = "NA")) +
+  scale_fill_continuous(breaks = NULL) +# remove fill legend
+  scale_color_manual(values = 'black', label = "Equilibrium i = 0") +
+  guides(colour = guide_legend(override.aes = list(fill = "grey"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+zero_legend <- get_legend(heatmap_zero_legend)
+
+heatmap_NA_legend <- heatmap_mad_cun +
+  geom_tile(aes(x = v, y = e, colour = "NA")) +
+  scale_fill_continuous(breaks = NULL) +# remove fill legend
+  scale_color_manual(values = "black", label = "Bi-stability") +
+  guides(colour = guide_legend(override.aes = list(fill = "yellow"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+NA_legend <- get_legend(heatmap_NA_legend)
+
+all_legends <- arrangeGrob(heatmap_legend, zero_legend, NA_legend, nrow=1)
+#grid.arrange(all_legends)
+
+heatmap_don_R0_line <- heatmap_don_R0_line +
+  theme_bw() +
+  theme(#text = element_text(size = 14),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        #strip.text = element_text(face = "bold", size = 12),
+        legend.position = "none",
+        legend.title = element_blank(),
+        axis.title = element_blank()) +
+  scale_fill_gradientn(colours = c("lightgrey", "red", "blue"),
+                       values = rescale(c(0, 0.00001, 1)),
+                       limits = c(0,1),
+                       na.value = "yellow")
+
+heatmap_mad_new <- heatmap_mad_new +
+  theme_bw() +
+  theme(#text = element_text(size = 14),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        #strip.text = element_text(face = "bold", size = 12),
+        legend.position = "none",
+        legend.title = element_blank(),
+        axis.title = element_blank())
+
+heatmap_mad_cun <- heatmap_mad_cun +
+  theme_bw() +
+  theme(#text = element_text(size = 14),
+        strip.background = element_blank(), 
+        strip.placement = "outside",
+        #strip.text = element_text(face = "bold", size = 12),
+        legend.position = "none",
+        legend.title = element_blank(),
+        axis.title = element_blank()) #+
+  #labs(x = "Infected plant attractiveness (v)")
+
+y_axis <- textGrob(expression("Infected plant acceptability ("*epsilon*")"),
+                   rot = 90,
+                   gp = gpar(fontsize = 12))
+x_axis <- textGrob("Infected plant attractiveness (v)",
+                   gp = gpar(fontsize = 12))
+
+arrange_hm_no_legend <- arrangeGrob(heatmap_don_R0_line, heatmap_mad_new, heatmap_mad_cun,
+                                    left = y_axis, bottom = x_axis)
+
+layout_hm <- matrix(c(1,1,1,1,1,1,1,2),
+                    ncol=1)
+
+pdf("results/heatmaps_3_models_R0linedon.pdf", height = 9, width = 7)
+grid.arrange(arrange_hm_no_legend, all_legends,
+             layout_matrix = layout_hm)
+dev.off()
+
+## investigate bi-stability madden-cunniffe
+parms_bistab[["eta"]] <- parms[["eta"]]
+
+for (state in all_init_states_mad) {
+  trajec <- data.frame(ode(y = c(I = state, Z = 0),
+                           times = seq(0, 1, by = 0.05),
+                           parms = parms_bistab,
+                           func = madden_cunniffe_vpref_ode))
+  trajec$I <- trajec$I/parms[["H"]] # make proportion
+  
+  # plot trajectory of infected plants
+  if (state == all_init_states_mad[1]) {
+    trajec_plot_mad_cun <- ggplot(data = trajec, aes(x = time, y = I)) +
+      geom_line() +
+      labs(x = "Time (days)",
+           y = "Proportion of infected plants")
+  } else {
+    trajec_plot_mad_cun <- trajec_plot_mad_cun +
+      geom_line(data = trajec, aes(x = time, y = I))
+  }
+  
+}
+trajec_plot_mad_cun <- trajec_plot_mad_cun +
+  # annotate("text", label = paste("v =", round(parms_bistab[["v"]],3),
+  #                                ", e =", round(parms_bistab[["e"]], 3)), 
+  #          x = 12, y = 0.7) +
+  labs(title = "c) Madden-Cunniffe")
+
+grid.arrange(#trajec_plot_don, 
+  trajec_plot_mad, trajec_plot_mad_cun)
+
+
+
 
