@@ -278,7 +278,7 @@ donnelly_simp_vdynamic_ode <- function(times, states, parms) {
   return(list(c(di)))
 }
 
-
+#### TIMES, PARMS, INIT STATES ####
 # parameters
 parms <- c(
   
@@ -330,14 +330,14 @@ init_states_don_simp <- c(
 
 init_states_don_full <- c(
   i = 1/parms[["H"]],
-  As = num_vectors / parms[["H"]] / 2,
-  Ai = num_vectors / parms[["H"]] / 2
+  As = num_vectors / parms[["H"]],
+  Ai = num_vectors / parms[["H"]]
 )
 
 times <- seq(0, 30, by = 0.2)
 
-
-###### run epidemic - madden fixed phi ######
+#### RUN EPIDEMICS ####
+###### run epidemic - madden fixed phi
 trajec_mad <- data.frame(ode(y = init_states_mad,
                              times = times,
                              parms = parms,
@@ -362,7 +362,7 @@ mad_vec_trajec <- ggplot(data = trajec_mad_long %>% filter(!compartment == "I"),
 grid.arrange(mad_plant_trajec, mad_vec_trajec)
 
 
-###### run epidemic - madden variable phi ######
+###### run epidemic - madden variable phi 
 trajec_mad_cun <- data.frame(ode(y = init_states_mad,
                              times = times,
                              parms = parms,
@@ -386,7 +386,7 @@ mad_cun_vec_trajec <- ggplot(data = trajec_mad_cun_long %>% filter(!compartment 
 
 grid.arrange(mad_cun_plant_trajec, mad_cun_vec_trajec)
 
-###### run epidemic - donnelly simple ######
+###### run epidemic - donnelly simple 
 trajec_don_simp <- data.frame(ode(y = init_states_don_simp,
                                  times = times,
                                  parms = parms,
@@ -400,7 +400,7 @@ don_simp_plant_trajec <- ggplot(data = trajec_don_simp,
 don_simp_plant_trajec
 
 
-###### run epidemic - donnelly full ######
+###### run epidemic - donnelly full 
 trajec_don_full <- data.frame(ode(y = init_states_don_full,
                                   times = times,
                                   parms = parms,
@@ -411,6 +411,7 @@ don_full_plant_trajec <- ggplot(data = trajec_don_full,
   geom_line() +
   ggtitle("Full Donnelly model") +
   labs(y = "Proportion of infected plants", x = "Time (days)")
+
 don_full_plant_trajec
 
 
@@ -507,9 +508,9 @@ get_AUDPC_diff_data <- function(x_parm_names, y_parm_names, x_parm_vals, y_parm_
 #                        guide = guide_colorbar(barheight = unit(8, "cm"), barwidth = unit(1.5, "cm")))
 # v_e_don_comparison
 
-#############
 
-### DO SENSITIVITY ANALYSIS 
+
+### DO SENSITIVITY ANALYSIS ####
 
 vary_param <- function(init_states, times, parms, varied_parm_name, varied_parm_vals, func, model) {
   
@@ -641,7 +642,7 @@ do.call("grid.arrange", sens_anal_plots[[2]])
 do.call("grid.arrange", sens_anal_plots[[3]])
 dev.off()
 
-### FIND OPTIMUM PHI AND THETA VALS
+### FIND OPTIMUM PHI AND THETA VALS ####
 find_theta_phi_vals <- function(theta_phi_data, init_states_don, init_states_mad, times, parms) {
   
   # function to find point at which epidemic takes off (final_I > 0) for phi and theta
@@ -810,7 +811,7 @@ parms[["eta"]] <- 1/(parms[["phi"]]*parms[["w_mad"]])
 # grid.arrange(heatmap_mad_cun, heatmap_mad, heatmap_don)
 
 
-#### NUMERICALLY SOLVE MODELS TO CREATE HEATMAPS
+#### NUMERICALLY SOLVE MODELS TO CREATE HEATMAPS ####
 madden_nleqslv_func <- function(states, parms) {
   
   I <- states[1]
@@ -1029,7 +1030,7 @@ create_v_e_heatmap <- function(v_vals, e_vals, model_names, nleqslv_funcs, start
       }))
 
   
-  browser()
+  #browser()
   # column bind equilibria_all_models to v_e_vals
   col_names <- paste(model_names, "I_eq", sep = "_")
   names(equilibria_all_models) <- col_names
@@ -1101,7 +1102,7 @@ grid.arrange(heatmap_don, heatmap_mad, heatmap_mad_cun)
 # grid.arrange(heatmap_don, heatmap_mad, heatmap_mad_cun)
 # dev.off()
 
-## INVESTIGATE WHY DON'T SEE BISTABILITY
+#### INVESTIGATE WHY DON'T SEE BISTABILITY ####
 madden_cunniffe_vdynamic_no_EM_ode <- function(times, y, par) {
   
   S <- par[["H"]] - y[["I"]] # number of susceptible plants
@@ -1286,6 +1287,10 @@ mad_cun_trajecs_plot <- plot_multiple_trajec_mad(starting_vals_mad_new_S,
                                                        madden_cunniffe_vdynamic_ode)
 grid.arrange(mad_cun_trajecs_plot)
 
+pdf("results/bistability_full_madden.pdf")
+grid.arrange(mad_cun_trajecs_plot)
+dev.off()
+
 parms_new[["p"]] <- 0.2
 
 # change init values so vectors always start uninfective
@@ -1316,3 +1321,103 @@ mad_cun_trajecs_plot_no_EM_fixed_v <- plot_multiple_trajec_mad(starting_vals_mad
                                                        madden_cunniffe_vdynamic_no_EM_ode)
 
 grid.arrange(mad_cun_trajecs_plot_no_EM_fixed_v) # no bistability even with no emigration
+
+
+#### CREATE NEW MADDEN MODEL WITH DON-LIKE APHID DYNAMICS (4 vec state equations) ####
+
+# madden_4vec_vdynamic_ode <- function(times, y, par) {
+#   
+#   # states
+#   I <- y[["I"]] # number infected plants
+#   Xs <- y[["Xs"]] # number healthy vectors per susceptible plant
+#   Xi <- y[["Xi"]] # number healthy vectors per infected plant
+#   Zs <- y[["Zs"]] # number infective vectors per susceptible plant
+#   Zi <- y[["Zi"]] # number infective vectors per infected plant
+#   
+#   #parameters
+#   tau <- par[["tau"]] # rate of moving through infectious state in vector
+#   w <- par[["w_mad"]] # feeding probability on healthy plant
+#   phi <- par[["phi"]] # plants visited per day by an insect
+#   a <- par[["a"]] # virus acquisition probability by vectors
+#   b <- par[["b"]] # plant inoculation probability by vectors
+#   c <- par[["c"]] # natural plant death rate
+#   d <- par[["d"]] # plant death rate due to infection
+#   v <- par[["v"]] # infected plant attractiveness
+#   e <- par[["e"]] # infected plant acceptability 
+#   lamda <- par[["lamda"]] # birth rate of vectors
+#   K <- par[["K"]] # carrying capacity of vectors per plant
+#   alpha <- par[["alpha"]] # vector death rate
+#   H <- par[["H"]] # number of host plants
+#   p <- par[["H"]] # chance of vector emigration per flight
+#   
+#   S <- H - I
+#   Z <- S*Zs + I*Zi # total number of infective insects
+#   
+#   # define sections of state equations
+#   ## plant infection + recovery
+#   plant_infection <- phi*b*Z*S/(S + v*I)
+#   plant_recovery <- (c + d)*I
+#   
+#   ## vector birth rates (per plant)
+#   S_births <- lamda*(Xs + Zs)*(1 - (Xs + Zs)/K)
+#   I_births <- lamda*(Xi + Zi)*(1 - (Xi + Xi)/K)
+#   
+#   ## vector death rates (per plant)
+#   Xs_death <- alpha*Xs
+#   Xi_death <- alpha*Xi
+#   Zs_death <- alpha*Zs
+#   Zi_death <- alpha*Zi
+#   
+#   ## vector emigration rates (per plant)
+#   Xs_emigration <- phi*p*Xs
+#   Xi_emigration <- phi*p*Xi
+#   Zs_emigration <- phi*p*Zs
+#   Zi_emigration <- phi*p*Zi
+#   
+#   ## vector loss of infectivity rates (per plant)
+#   S_loss_of_infectivity <- tau*Zs
+#   I_loss_of_infectivity <- tau*Zi
+#   
+#   ## virus acquisition by vector (per plant)
+#   virus_acquisition <- phi*a*(1 - e*w)*Xi*v*I/(S + v*I) # Xi as need to be on infected plant to get virus
+#   
+#   ## vector inoculation of plant ???
+#   
+#   ## movement between plant types
+#   X_move_S_to_I <- phi*Xs*(1 - a)*v*I/(S + v*I) # rationale: phi*Xs = leave S, v*I/(S + v*I) = land on I, 
+#                                                # (1 - a) = don't acquire virus
+#   X_move_I_to_S <- phi*Xi*S/(S + v*I) # rationale: phi*Xi = leave I, S/(S + v*I) = land on S
+#   Z_move_S_to_I <- (1 - tau)*phi*Zs*v*I/(S + v*I) # rationale: (1 - tau) = don't lose infectivity (needed???),
+#                                                   # phi*Zs = leave S, v*I/(S + v*I) = land on I
+#   Z_move_I_to_S <- (1 - tau)*phi*Zi*S/(S + v*I)*(1 - b) # rationale:  (1 - tau) = don't lose infectivity (???),
+#                                                         # phi*Zi = leave I, S/(S + v*I) = land on S, 
+#                                                         # (1 - b) = don't inoculate S plant
+#   
+#   # other movements?? Zi->Xs? Zs->Xi?? Xi->Zs?
+#   
+#   # state equations
+#   dI <- phi*b*Z*S/(S + v*I) - (c + d)*I
+#   
+#   dXs <- S_loss_of_infectivity - X_move_S_to_I + X_move_I_to_S + S_births - Xs_death - Xs_emigration
+#   dZs <- Z_move_I_to_S - Z_move_S_to_I - S_loss_of_infectivity - Zs_death - Zs_emigration
+#   
+#   dXi <- I_loss_of_infectivity - virus_acquisition + X_move_S_to_I - X_move_I_to_S + I_births - Xi_death - Xi_emigration
+#   dZi <- virus_acquisition - Z_move_I_to_S + Z_move_S_to_I- I_loss_of_infectivity - Zi_death - Zi_emigration
+#   
+#   return(list(c(dI, dXs, dXi, dZs, dZi)))
+# }
+# 
+# init_states_mad_new <- c(I = 1, 
+#                          Xs = num_vectors/parms[["H"]],
+#                          Xi = num_vectors/parms[["H"]],
+#                          Zs = 0,
+#                          Zi = 0)
+# 
+# run <- data.frame(ode(y = init_states_mad_new,
+#                       times = times,
+#                       parms = parms,
+#                       func = madden_4vec_vdynamic_ode))
+# head(run)
+# plot(run$time, run$I)
+# plot(run$time, run$Xs)
+# plot(run$time, run$Xi)

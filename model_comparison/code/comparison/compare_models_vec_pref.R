@@ -26,6 +26,7 @@ library(dplyr)
 library(gridExtra)
 library(grid)
 library(gridtext)
+library(scales)
 
 #### DEFINE MADDEN ODE
 madden_vpref_ode <- function(times, y, par) {
@@ -629,9 +630,11 @@ find_I_equilibrium <- function(parms, model, mult_eq_return_NA=T) {
       return(I_equilibriums/H) # return as a proportion of infected plants
     }
     else if (mult_eq_return_NA == T) { # if input has mult_eq_return_NA = T, return NA
+      browser()
       return(c(NA))
     }
     return(I_equilibriums/H) # return as a proportion of infected plants
+    browser()
   }
   
   if (model == "Donnelly") {
@@ -738,8 +741,6 @@ v_vals <- seq(0.001, 5, length.out = 100)
 e_vals <- seq(0.001, 1/parms[["w_mad"]], length.out = 100) # in both models e*w must be < 1
 
 # create heatmap data
-v_valss <- seq(0.001, 5, length.out = 3)
-e_valss <- seq(0.001, 5, length.out = 3)
 v_e_df <- create_heatmap_data(e_vals, v_vals, models = c("Donnelly", "Madden"), parms)
 
 heatmap_don <- ggplot(data = v_e_df, aes(x = v, y = e, fill = Donnelly_I_eq)) +
@@ -948,61 +949,91 @@ parms_bistab[["e"]] <- bistable_row[1, "e"]
 
 all_init_states_mad <- seq(1, 0.8*parms[["H"]], length.out = 30)
 
-for (state in all_init_states_mad) {
-  trajec <- data.frame(ode(y = c(I = state, Z = 0),
-                           times = seq(0, 1, by = 0.05),
-                           parms = parms_bistab,
-                           func = madden_vpref_ode))
-  trajec$I <- trajec$I/parms[["H"]] # make proportion
+plot_many_trajec_madden <- function(init_I_states, times, parms, func) {
   
-  # plot trajectory of infected plants
-  if (state == all_init_states_mad[1]) {
-    trajec_plot_mad <- ggplot(data = trajec, aes(x = time, y = I)) +
-      geom_line() +
-      labs(x = "Time (days)",
-           y = "Proportion of infected plants")
-  } else {
-    trajec_plot_mad <- trajec_plot_mad +
-      geom_line(data = trajec, aes(x = time, y = I))
+  ## function that for given times, parms, madden-type ode function, runs
+  ## the ode for many initial starting I states (initial Z = 0) and plots 
+  ## proportion I vs time, proportion Z vs time, proportion I vs proportion Z
+  colours <- c("red", "blue", "darkgreen", "black")
+  
+  for (state in init_I_states) {
+    trajec <- data.frame(ode(y = c(I = state, Z = 0),
+                             times = times,
+                             parms = parms,
+                             func = func))
+    trajec$I <- trajec$I/parms[["H"]] # make proportion
+    trajec$Z <- trajec$Z/parms[["A"]]
+    
+    # plot trajectory of infected plants
+    if (state == init_I_states[1]) {
+      I_trajec_plot <- ggplot(data = trajec, aes(x = time, y = I)) +
+        geom_line() +
+        labs(x = "Time (arbitrary units)",
+             y = "Proportion of infected plants")
+      Z_trajec_plot <- ggplot(data = trajec, aes(x = time, y = Z)) +
+        geom_line() +
+        labs(x = "Time (arbitrary units)",
+             y = "Proportion of infective aphids")
+      I_vs_Z_plot <- ggplot(data = trajec, aes(x = I, y = Z)) +
+        geom_line(colour = sample(colours, 1)) +
+        labs(x = "Proportion of infected plants",
+             y = "Proportion of infective aphids")
+    } else {
+      I_trajec_plot <- I_trajec_plot +
+        geom_line(data = trajec, aes(x = time, y = I))
+      Z_trajec_plot <- Z_trajec_plot +
+        geom_line(data = trajec, aes(x = time, y = Z))
+      I_vs_Z_plot <- I_vs_Z_plot +
+        geom_line(data = trajec, aes(x = I, y = Z), colour = sample(colours, 1))
+    }
+    
   }
-  
+  return(list(I_trajec_plot, Z_trajec_plot, I_vs_Z_plot))
 }
-trajec_plot_mad <- trajec_plot_mad +
+
+time_zoomed <- seq(0, 1, by = 0.05)
+trajec_plot_mad_zoom <- plot_many_trajec_madden(all_init_states_mad,
+                                           times = time_zoomed, 
+                                           parms = parms_bistab,
+                                           func = madden_vpref_ode)
+do.call(grid.arrange, trajec_plot_mad_zoom)
+trajec_plot_mad_zoom[[1]] <- trajec_plot_mad_zoom[[1]] +
   # annotate("text", label = paste("v =", round(parms_bistab[["v"]],3),
   #                                ", e =", round(parms_bistab[["e"]], 3)), 
   #          x = 12, y = 0.7) +
-  labs(title = "b) Madden")
+  labs(title = "Madden")
+
 #pdf("results/bistability_trajecs_don.pdf")
 #grid.arrange(trajec_plot_don, trajec_plot_mad)
 #dev.off()
 
 
 
-trajec_low <- data.frame(ode(y = init_states_mad,
-                                 times = 1:60,
-                                 func = madden_vpref_ode,
-                                 parms = parms_bistab))
-trajec_low$I <- trajec_low$I/parms[["H"]] # make proportion
-
-trajec_low_long <- reshape2::melt(trajec_low, id.vars = "time")
-names(trajec_low_long) <- c("time", "compartment", "number")
-
-trajec_high <- data.frame(ode(y = c(I = 0.99*parms[["H"]], Z = 0),
-                             times = 1:60,
-                             func = madden_vpref_ode,
-                             parms = parms_bistab))
-trajec_high$I <- trajec_high$I/parms[["H"]] # make proportion
-
-
-trajec_high_long <- reshape2::melt(trajec_high, id.vars = "time")
-names(trajec_high_long) <- c("time", "compartment", "number")
-
-# plot trajectory of infected plants and vector compartments
-bistab_trajec <- ggplot(data = trajec_low_long %>% filter(compartment == "I"),
-                        aes(x = time, y = number)) +
-  geom_line() +
-  geom_line(data = trajec_high_long %>% filter(compartment == "I"))
-bistab_trajec
+# trajec_low <- data.frame(ode(y = init_states_mad,
+#                                  times = 1:60,
+#                                  func = madden_vpref_ode,
+#                                  parms = parms_bistab))
+# trajec_low$I <- trajec_low$I/parms[["H"]] # make proportion
+# 
+# trajec_low_long <- reshape2::melt(trajec_low, id.vars = "time")
+# names(trajec_low_long) <- c("time", "compartment", "number")
+# 
+# trajec_high <- data.frame(ode(y = c(I = 0.99*parms[["H"]], Z = 0),
+#                              times = 1:60,
+#                              func = madden_vpref_ode,
+#                              parms = parms_bistab))
+# trajec_high$I <- trajec_high$I/parms[["H"]] # make proportion
+# 
+# 
+# trajec_high_long <- reshape2::melt(trajec_high, id.vars = "time")
+# names(trajec_high_long) <- c("time", "compartment", "number")
+# 
+# # plot trajectory of infected plants and vector compartments
+# bistab_trajec <- ggplot(data = trajec_low_long %>% filter(compartment == "I"),
+#                         aes(x = time, y = number)) +
+#   geom_line() +
+#   geom_line(data = trajec_high_long %>% filter(compartment == "I"))
+# bistab_trajec
 
 
 #### INVESTIGATE RELATIONSHIP BETWEEN W_DON AND W_MAD
@@ -1306,37 +1337,111 @@ grid.arrange(arrange_hm_no_legend, all_legends,
              layout_matrix = layout_hm)
 dev.off()
 
-## investigate bi-stability madden-cunniffe
-parms_bistab[["eta"]] <- parms[["eta"]]
+######## INVESTIGATE WEIRD BISTABLE BEHAVIOUR IN MADDEN-TYPE MODELS
 
-for (state in all_init_states_mad) {
-  trajec <- data.frame(ode(y = c(I = state, Z = 0),
-                           times = seq(0, 1, by = 0.05),
-                           parms = parms_bistab,
-                           func = madden_cunniffe_vpref_ode))
-  trajec$I <- trajec$I/parms[["H"]] # make proportion
-  
-  # plot trajectory of infected plants
-  if (state == all_init_states_mad[1]) {
-    trajec_plot_mad_cun <- ggplot(data = trajec, aes(x = time, y = I)) +
-      geom_line() +
-      labs(x = "Time (days)",
-           y = "Proportion of infected plants")
-  } else {
-    trajec_plot_mad_cun <- trajec_plot_mad_cun +
-      geom_line(data = trajec, aes(x = time, y = I))
-  }
-  
-}
-trajec_plot_mad_cun <- trajec_plot_mad_cun +
+## plot zoom (tmax=1) version of trajectories for mad-cun and display with madden
+parms_bistab[["eta"]] <- parms[["eta"]]
+time_zoomed2 <- seq(0, 1, length.out = 200)
+trajec_plot_mad_cun_zoom <- plot_many_trajec_madden(all_init_states_mad,
+                                                    times = time_zoomed2,
+                                                    parms = parms_bistab,
+                                                    func = madden_cunniffe_vpref_ode)
+
+trajec_plot_mad_cun_zoom[[1]] <- trajec_plot_mad_cun_zoom[[1]] +
   # annotate("text", label = paste("v =", round(parms_bistab[["v"]],3),
   #                                ", e =", round(parms_bistab[["e"]], 3)), 
   #          x = 12, y = 0.7) +
-  labs(title = "c) Madden-Cunniffe")
+  labs(title = "Madden-Cunniffe - zoomed (tmax=1)")
 
-grid.arrange(#trajec_plot_don, 
-  trajec_plot_mad, trajec_plot_mad_cun)
+lay <- matrix(c(1,2,3,4,5,6), nrow = 3, byrow = F)
+grid.arrange(trajec_plot_mad_cun_zoom[[1]],
+             trajec_plot_mad_cun_zoom[[2]],
+             trajec_plot_mad_cun_zoom[[3]],
+             trajec_plot_mad_zoom[[1]],
+             trajec_plot_mad_zoom[[2]],
+             trajec_plot_mad_zoom[[3]],
+             ncol = 2, layout_matrix = lay)
+
+# pdf("results/bistable_trajecs_madden-type_zoom.pdf")
+# grid.arrange(trajec_plot_mad_cun_zoom[[1]],
+#              trajec_plot_mad_cun_zoom[[2]],
+#              trajec_plot_mad_cun_zoom[[3]],
+#              trajec_plot_mad_zoom[[1]],
+#              trajec_plot_mad_zoom[[2]],
+#              trajec_plot_mad_zoom[[3]],
+#              ncol = 2, layout_matrix = lay)
+# dev.off()
+
+## run for a long time to see if trajectories converge
+times_long <- seq(0, 1000, length.out = 2000)
+
+trajec_plot_mad_long <- plot_many_trajec_madden(all_init_states_mad,
+                                                times = times_long,
+                                                parms = parms_bistab,
+                                                func = madden_vpref_ode)
+trajec_plot_mad_long[[1]] <- trajec_plot_mad_long[[1]] + labs(title = "Madden - tmax = 1000")
+
+trajec_plot_mad_cun_long <- plot_many_trajec_madden(all_init_states_mad,
+                                                    times = times_long,
+                                                    parms = parms_bistab,
+                                                    func = madden_cunniffe_vpref_ode)
+trajec_plot_mad_cun_long[[1]] <- trajec_plot_mad_cun_long[[1]] + labs(title = "Madden-Cunniffe - tmax = 1000")
+
+grid.arrange(trajec_plot_mad_cun_long[[1]],
+             trajec_plot_mad_cun_long[[2]],
+             trajec_plot_mad_cun_long[[3]],
+             trajec_plot_mad_long[[1]],
+             trajec_plot_mad_long[[2]],
+             trajec_plot_mad_long[[3]],
+             ncol = 2, layout_matrix = lay)
+
+# pdf("results/bistable_trajecs_madden-type_long.pdf")
+# grid.arrange(trajec_plot_mad_cun_long[[1]],
+#              trajec_plot_mad_cun_long[[2]],
+#              trajec_plot_mad_cun_long[[3]],
+#              trajec_plot_mad_long[[1]],
+#              trajec_plot_mad_long[[2]],
+#              trajec_plot_mad_long[[3]],
+#              ncol = 2, layout_matrix = lay)
+# dev.off()
+
+# run for less time to see start
+times_short <- seq(0, 15, length.out = 200)
+trajec_plot_mad <- plot_many_trajec_madden(all_init_states_mad,
+                                           times = times_short,
+                                           parms = parms_bistab,
+                                           func = madden_vpref_ode)
+trajec_plot_mad[[1]] <- trajec_plot_mad[[1]] + labs(title = "Madden - tmax = 15")
+
+trajec_plot_mad_cun <- plot_many_trajec_madden(all_init_states_mad,
+                                                    times = times_short,
+                                                    parms = parms_bistab,
+                                                    func = madden_cunniffe_vpref_ode)
+trajec_plot_mad_cun[[1]] <- trajec_plot_mad_cun[[1]] + labs(title = "Madden-Cunniffe - tmax = 15")
+
+grid.arrange(trajec_plot_mad_cun[[1]],
+             trajec_plot_mad_cun[[2]],
+             trajec_plot_mad_cun[[3]],
+             trajec_plot_mad[[1]],
+             trajec_plot_mad[[2]],
+             trajec_plot_mad[[3]],
+             ncol = 2, layout_matrix = lay)
+
+# pdf("results/bistable_trajecs_madden-type_short.pdf")
+# grid.arrange(trajec_plot_mad_cun[[1]],
+#              trajec_plot_mad_cun[[2]],
+#              trajec_plot_mad_cun[[3]],
+#              trajec_plot_mad[[1]],
+#              trajec_plot_mad[[2]],
+#              trajec_plot_mad[[3]],
+#              ncol = 2, layout_matrix = lay)
+# dev.off()
 
 
+# compare shorter and longer timeframes of Z vs time for madden
+grid.arrange(trajec_plot_mad_long[[2]], trajec_plot_mad[[2]])
+
+# compare mad and mad-cun plots of Z vs time
+grid.arrange(trajec_plot_mad_long[[2]], trajec_plot_mad[[2]])
 
 
