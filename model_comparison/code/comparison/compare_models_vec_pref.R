@@ -386,12 +386,12 @@ dev.off()
 ##### FIND APPROPRIATE VALUES FOR THETA AND PHI BASED ON THE OTHER VALUES SO FINAL I IS 0.5
 find_theta_phi_vals <- function(theta_phi_data, init_states_don, init_states_mad, times, parms) {
   
-  # function to find point at which epidemic takes off (final_I > 0) for phi and theta
+  # function to find point at which phi and theta value the final proportion of infected plants is 0.5
   
   phi_data <- theta_phi_data %>% filter(parm_name == "phi")
   theta_data <- theta_phi_data %>% filter(parm_name == "theta")
   
-  phi_index <- match(TRUE, phi_data$final_I > 0.5) # finds first instance of final_I > 0
+  phi_index <- match(TRUE, phi_data$final_I > 0.5) # finds first instance of final_I > 0.5
   theta_index <- match(TRUE, theta_data$final_I > 0.5)
   
   if (is.na(phi_index)) {

@@ -22,25 +22,25 @@ e <- 1 # infected plant acceptability
 
 # parameters
 parms <- c(
-  gamma = 20/3, # rate of recovery/death of I plants
+  gamma = 1, # rate of recovery/death of I plants
   theta = 1, # aphid dispersal rate per day
-  H = 400, # number host plants
+  H = 25, # number host plants
   p = p, # aphid emigration/death rate per journey between plants
   v = v, # infected plant attractiveness
   e = e, # infected plant acceptability 
   w = 0.2, # feeding rate on healthy plant
   Pacq = 1, # chance of virus acquisition by vector from infected plant
   Pinoc = 1, # chance of inoculating healthy plant
-  A = 1200 # vector population size
+  A = 75 # vector population size
 )
 
 #states
 init_states <- c(
-  i = 1/parms[["H"]] # frequency of infected plants
+  i = 3/parms[["H"]] # frequency of infected plants
 )
 
 # timeframe
-times <- seq(0, 20, by = 0.2)
+times <- seq(0, 8, by = 0.2)
 
 # define ode function
 donnelly_simple_ode <- function(times, states, parms) {
@@ -122,30 +122,31 @@ trajectory <- data.frame(ode(y = init_states,
                              func = donnelly_simple_ode))
 
 # plot trajectory of infected plants and number of aphids
-plant_trajec <- ggplot(data=trajectory, aes(x = time, y = i)) +
+plant_trajec <- ggplot(data=trajectory, aes(x = time, y = i*parms[["H"]])) +
   geom_line() +
-  labs(x = "Time (days)", y = "Frequency of infected plants, i")
+  labs(x = "Time (days)", y = "Number of infected plants") + 
+  ylim(0, parms[["H"]]+1)
 plant_trajec
 
-#VARY E (plant acceptability)
-e_vals <- c(0.25, 0.5, 1, 1.5, 2)
-
-e_trajecs <- vary_param_trajec(init_states, times, parms, "e", e_vals)
-
-# plot output
-e_vals_plot <- ggplot(data=e_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
-  geom_line() +
-  labs(col = "e value")
-e_vals_plot
-
-# VARY V (plant attractiveness)
-v_vals <- c(1, 3, 0.5)
-
-long_times <- seq(0, 20, by=0.5)
-v_trajecs <- vary_param_trajec(init_states, long_times, parms, "v", v_vals)
-
-# plot output
-v_vals_plot <- ggplot(data=v_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
-  geom_line() +
-  labs(col = "v value")
-v_vals_plot
+# #VARY E (plant acceptability)
+# e_vals <- c(0.25, 0.5, 1, 1.5, 2)
+# 
+# e_trajecs <- vary_param_trajec(init_states, times, parms, "e", e_vals)
+# 
+# # plot output
+# e_vals_plot <- ggplot(data=e_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
+#   geom_line() +
+#   labs(col = "e value")
+# e_vals_plot
+# 
+# # VARY V (plant attractiveness)
+# v_vals <- c(1, 3, 0.5)
+# 
+# long_times <- seq(0, 20, by=0.5)
+# v_trajecs <- vary_param_trajec(init_states, long_times, parms, "v", v_vals)
+# 
+# # plot output
+# v_vals_plot <- ggplot(data=v_trajecs %>% filter(variable == "i"), aes(x = time, y = value, col = as.factor(param_val))) +
+#   geom_line() +
+#   labs(col = "v value")
+# v_vals_plot

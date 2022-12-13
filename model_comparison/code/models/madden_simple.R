@@ -51,15 +51,15 @@ phi <- sqrt(theta*tau*(1-w)/(w#*a*b
 parms <- c(
   N = N, # number of host plants (equivalent to K in original Madden model)
   P = P, # total number of vectors
-  phi = phi, # plants visited per day by insect
+  phi = 4, # plants visited per day by insect
   k1 = k1, # inoculation rate by insect (set to NPT virus, equiv to 0.5hr)
   lamda = lamda, # rate of acquisition of virus by vector (set to NPT virus, equiv to 0.5hr)
   alpha = alpha, # vector population mortality rate
   T = T, # # time feeding/probing per plant visit
-  c = 20/3/2, # natural plant death rate (equivalent to beta in original Madden model)
-  d = 20/3/2, # plant death due to infection
+  c = 0.5,#20/3/2, # natural plant death rate (equivalent to beta in original Madden model)
+  d = 0.5,#20/3/2, # plant death due to infection
   v_t = alpha * (init_states[["X"]] + init_states[["Z"]]), # birth rate of vectors per day
-  tau = tau, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
+  tau = 4, # rate of moving through infectious state in vector (set to NPT virus, equiv to 6hr)
   b = b, # prob of plant inoculation per infective insect visit 
   a = a # probability of vector acquisition of virus from an infected plant per visit
   
